@@ -1,3 +1,4 @@
+// stm: #integration
 package itests
 
 import (
@@ -5,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-address"
-	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	paychtypes "github.com/filecoin-project/go-state-types/builtin/v8/paych"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
@@ -24,9 +25,16 @@ import (
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/events/state"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/itests/kit"
 )
 
 func TestPaymentChannelsAPI(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
+
+	//stm: @CHAIN_INCOMING_HANDLE_INCOMING_BLOCKS_001, @CHAIN_INCOMING_VALIDATE_BLOCK_PUBSUB_001, @CHAIN_INCOMING_VALIDATE_MESSAGE_PUBSUB_001
 	kit.QuietMiningLogs()
 
 	ctx := context.Background()
@@ -44,7 +52,7 @@ func TestPaymentChannelsAPI(t *testing.T) {
 		Miner(&miner, &paymentCreator, kit.WithAllSubsystems()).
 		Start().
 		InterconnectAll()
-	bms := ens.BeginMining(blockTime)
+	bms := ens.BeginMiningMustPost(blockTime)
 	bm := bms[0]
 
 	// send some funds to register the receiver
@@ -58,7 +66,9 @@ func TestPaymentChannelsAPI(t *testing.T) {
 	require.NoError(t, err)
 
 	channelAmt := int64(7000)
-	channelInfo, err := paymentCreator.PaychGet(ctx, createrAddr, receiverAddr, abi.NewTokenAmount(channelAmt))
+	channelInfo, err := paymentCreator.PaychGet(ctx, createrAddr, receiverAddr, abi.NewTokenAmount(channelAmt), api.PaychGetOpts{
+		OffChain: false,
+	})
 	require.NoError(t, err)
 
 	channel, err := paymentCreator.PaychGetWaitReady(ctx, channelInfo.WaitSentinel)
@@ -107,6 +117,7 @@ func TestPaymentChannelsAPI(t *testing.T) {
 	require.NoError(t, err)
 	preds := state.NewStatePredicates(paymentCreator)
 	finished := make(chan struct{})
+	//stm: @CHAIN_STATE_GET_ACTOR_001
 	err = ev.StateChanged(func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
 		act, err := paymentCreator.StateGetActor(ctx, channel, ts.Key())
 		if err != nil {
@@ -161,7 +172,7 @@ func TestPaymentChannelsAPI(t *testing.T) {
 	require.EqualValues(t, excessAmt, vouchRes.Shortfall, "Expected voucher shortfall of %d, got %d", excessAmt, vouchRes.Shortfall)
 
 	// Add a voucher whose value would exceed the channel balance
-	vouch := &paych.SignedVoucher{ChannelAddr: channel, Amount: excessAmt, Lane: 4, Nonce: 1}
+	vouch := &paychtypes.SignedVoucher{ChannelAddr: channel, Amount: excessAmt, Lane: 4, Nonce: 1}
 	vb, err := vouch.SigningBytes()
 	require.NoError(t, err)
 
@@ -182,6 +193,7 @@ func TestPaymentChannelsAPI(t *testing.T) {
 	collectMsg, err := paymentReceiver.PaychCollect(ctx, channel)
 	require.NoError(t, err)
 
+	//stm: @CHAIN_STATE_WAIT_MSG_001
 	res, err = paymentReceiver.StateWaitMsg(ctx, collectMsg, 3, api.LookbackNoLimit, true)
 	require.NoError(t, err)
 	require.EqualValues(t, 0, res.Receipt.ExitCode, "unable to collect on payment channel")

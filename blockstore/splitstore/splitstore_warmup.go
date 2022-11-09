@@ -1,16 +1,17 @@
 package splitstore
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
+	blocks "github.com/ipfs/go-block-format"
+	"github.com/ipfs/go-cid"
+	ipld "github.com/ipfs/go-ipld-format"
 	"golang.org/x/xerrors"
 
-	blocks "github.com/ipfs/go-block-format"
-	cid "github.com/ipfs/go-cid"
-
 	"github.com/filecoin-project/go-state-types/abi"
-	bstore "github.com/filecoin-project/lotus/blockstore"
+
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
 )
@@ -20,14 +21,14 @@ var (
 	WarmupBoundary = build.Finality
 )
 
-// warmup acuiqres the compaction lock and spawns a goroutine to warm up the hotstore;
+// warmup acquires the compaction lock and spawns a goroutine to warm up the hotstore;
 // this is necessary when we sync from a snapshot or when we enable the splitstore
 // on top of an existing blockstore (which becomes the coldstore).
 func (s *SplitStore) warmup(curTs *types.TipSet) error {
 	if !atomic.CompareAndSwapInt32(&s.compacting, 0, 1) {
 		return xerrors.Errorf("error locking compaction")
 	}
-
+	s.compactType = warmup
 	go func() {
 		defer atomic.StoreInt32(&s.compacting, 0)
 
@@ -55,12 +56,13 @@ func (s *SplitStore) doWarmup(curTs *types.TipSet) error {
 	if WarmupBoundary < epoch {
 		boundaryEpoch = epoch - WarmupBoundary
 	}
+	var mx sync.Mutex
 	batchHot := make([]blocks.Block, 0, batchSize)
-	count := int64(0)
-	xcount := int64(0)
-	missing := int64(0)
+	count := new(int64)
+	xcount := new(int64)
+	missing := new(int64)
 
-	visitor, err := s.markSetEnv.CreateVisitor("warmup", 0)
+	visitor, err := s.markSetEnv.New("warmup", 0)
 	if err != nil {
 		return xerrors.Errorf("error creating visitor: %w", err)
 	}
@@ -73,9 +75,9 @@ func (s *SplitStore) doWarmup(curTs *types.TipSet) error {
 				return errStopWalk
 			}
 
-			count++
+			atomic.AddInt64(count, 1)
 
-			has, err := s.hot.Has(c)
+			has, err := s.hot.Has(s.ctx, c)
 			if err != nil {
 				return err
 			}
@@ -84,50 +86,53 @@ func (s *SplitStore) doWarmup(curTs *types.TipSet) error {
 				return nil
 			}
 
-			blk, err := s.cold.Get(c)
+			blk, err := s.cold.Get(s.ctx, c)
 			if err != nil {
-				if err == bstore.ErrNotFound {
-					missing++
+				if ipld.IsNotFound(err) {
+					atomic.AddInt64(missing, 1)
 					return errStopWalk
 				}
 				return err
 			}
 
-			xcount++
+			atomic.AddInt64(xcount, 1)
 
+			mx.Lock()
 			batchHot = append(batchHot, blk)
 			if len(batchHot) == batchSize {
-				err = s.hot.PutMany(batchHot)
+				err = s.hot.PutMany(s.ctx, batchHot)
 				if err != nil {
+					mx.Unlock()
 					return err
 				}
 				batchHot = batchHot[:0]
 			}
+			mx.Unlock()
 
 			return nil
-		})
+		}, func(cid.Cid) error { return nil })
 
 	if err != nil {
 		return err
 	}
 
 	if len(batchHot) > 0 {
-		err = s.hot.PutMany(batchHot)
+		err = s.hot.PutMany(s.ctx, batchHot)
 		if err != nil {
 			return err
 		}
 	}
 
-	log.Infow("warmup stats", "visited", count, "warm", xcount, "missing", missing)
+	log.Infow("warmup stats", "visited", *count, "warm", *xcount, "missing", *missing)
 
-	s.markSetSize = count + count>>2 // overestimate a bit
-	err = s.ds.Put(markSetSizeKey, int64ToBytes(s.markSetSize))
+	s.markSetSize = *count + *count>>2 // overestimate a bit
+	err = s.ds.Put(s.ctx, markSetSizeKey, int64ToBytes(s.markSetSize))
 	if err != nil {
 		log.Warnf("error saving mark set size: %s", err)
 	}
 
 	// save the warmup epoch
-	err = s.ds.Put(warmupEpochKey, epochToBytes(epoch))
+	err = s.ds.Put(s.ctx, warmupEpochKey, epochToBytes(epoch))
 	if err != nil {
 		return xerrors.Errorf("error saving warm up epoch: %w", err)
 	}
@@ -136,7 +141,7 @@ func (s *SplitStore) doWarmup(curTs *types.TipSet) error {
 	s.mx.Unlock()
 
 	// also save the compactionIndex, as this is used as an indicator of warmup for upgraded nodes
-	err = s.ds.Put(compactionIndexKey, int64ToBytes(s.compactionIndex))
+	err = s.ds.Put(s.ctx, compactionIndexKey, int64ToBytes(s.compactionIndex))
 	if err != nil {
 		return xerrors.Errorf("error saving compaction index: %w", err)
 	}

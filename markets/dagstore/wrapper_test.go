@@ -1,37 +1,41 @@
+// stm: #unit
 package dagstore
 
 import (
 	"bytes"
 	"context"
-	"io"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/ipfs/go-cid"
+	carindex "github.com/ipld/go-car/v2/index"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	mh "github.com/multiformats/go-multihash"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/xerrors"
-
-	"github.com/filecoin-project/lotus/node/config"
 
 	"github.com/filecoin-project/dagstore"
 	"github.com/filecoin-project/dagstore/mount"
 	"github.com/filecoin-project/dagstore/shard"
 
-	"github.com/ipfs/go-cid"
-	"github.com/stretchr/testify/require"
+	"github.com/filecoin-project/lotus/node/config"
 )
 
 // TestWrapperAcquireRecovery verifies that if acquire shard returns a "not found"
 // error, the wrapper will attempt to register the shard then reacquire
-func TestWrapperAcquireRecovery(t *testing.T) {
+func TestWrapperAcquireRecoveryDestroy(t *testing.T) {
 	ctx := context.Background()
 	pieceCid, err := cid.Parse("bafkqaaa")
 	require.NoError(t, err)
 
+	h, err := mocknet.New().GenPeer()
+	require.NoError(t, err)
 	// Create a DAG store wrapper
 	dagst, w, err := NewDAGStore(config.DAGStoreConfig{
 		RootDir:    t.TempDir(),
 		GCInterval: config.Duration(1 * time.Millisecond),
-	}, mockLotusMount{})
+	}, mockLotusMount{}, h)
 	require.NoError(t, err)
 
 	defer dagst.Close() //nolint:errcheck
@@ -47,9 +51,11 @@ func TestWrapperAcquireRecovery(t *testing.T) {
 			Accessor: getShardAccessor(t),
 		},
 		register: make(chan shard.Key, 1),
+		destroy:  make(chan shard.Key, 1),
 	}
 	w.dagst = mock
 
+	//stm: @MARKET_DAGSTORE_ACQUIRE_SHARD_002
 	mybs, err := w.LoadShard(ctx, pieceCid)
 	require.NoError(t, err)
 
@@ -72,17 +78,41 @@ func TestWrapperAcquireRecovery(t *testing.T) {
 		count++
 	}
 	require.Greater(t, count, 0)
+
+	// Destroy the shard
+	dr := make(chan dagstore.ShardResult, 1)
+	err = w.DestroyShard(ctx, pieceCid, dr)
+	require.NoError(t, err)
+
+	dctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	select {
+	case <-dctx.Done():
+		require.Fail(t, "failed to call destroy")
+	case k := <-mock.destroy:
+		require.Equal(t, k.String(), pieceCid.String())
+	}
+
+	var dcount int
+	dch, err := mybs.AllKeysChan(ctx)
+	require.NoError(t, err)
+	for range dch {
+		count++
+	}
+	require.Equal(t, dcount, 0)
 }
 
 // TestWrapperBackground verifies the behaviour of the background go routine
 func TestWrapperBackground(t *testing.T) {
 	ctx := context.Background()
+	h, err := mocknet.New().GenPeer()
+	require.NoError(t, err)
 
 	// Create a DAG store wrapper
 	dagst, w, err := NewDAGStore(config.DAGStoreConfig{
 		RootDir:    t.TempDir(),
 		GCInterval: config.Duration(1 * time.Millisecond),
-	}, mockLotusMount{})
+	}, mockLotusMount{}, h)
 	require.NoError(t, err)
 
 	defer dagst.Close() //nolint:errcheck
@@ -96,10 +126,12 @@ func TestWrapperBackground(t *testing.T) {
 	w.dagst = mock
 
 	// Start up the wrapper
+	//stm: @MARKET_DAGSTORE_START_001
 	err = w.Start(ctx)
 	require.NoError(t, err)
 
 	// Expect GC to be called automatically
+	//stm: @MARKET_DAGSTORE_START_002
 	tctx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
 	select {
@@ -110,6 +142,7 @@ func TestWrapperBackground(t *testing.T) {
 
 	// Expect that when the wrapper is closed it will call close on the
 	// DAG store
+	//stm: @MARKET_DAGSTORE_CLOSE_001
 	err = w.Close()
 	require.NoError(t, err)
 
@@ -129,11 +162,26 @@ type mockDagStore struct {
 
 	gc      chan struct{}
 	recover chan shard.Key
+	destroy chan shard.Key
 	close   chan struct{}
 }
 
-func (m *mockDagStore) DestroyShard(ctx context.Context, key shard.Key, out chan dagstore.ShardResult, _ dagstore.DestroyOpts) error {
+func (m *mockDagStore) GetIterableIndex(key shard.Key) (carindex.IterableIndex, error) {
+	return nil, nil
+}
+
+func (m *mockDagStore) ShardsContainingMultihash(ctx context.Context, h mh.Multihash) ([]shard.Key, error) {
+	return nil, nil
+}
+
+func (m *mockDagStore) GetShardKeysForCid(c cid.Cid) ([]shard.Key, error) {
 	panic("implement me")
+}
+
+func (m *mockDagStore) DestroyShard(ctx context.Context, key shard.Key, out chan dagstore.ShardResult, _ dagstore.DestroyOpts) error {
+	m.destroy <- key
+	out <- dagstore.ShardResult{Key: key}
+	return nil
 }
 
 func (m *mockDagStore) GetShardInfo(k shard.Key) (dagstore.ShardInfo, error) {
@@ -191,7 +239,7 @@ func (m mockLotusMount) Start(ctx context.Context) error {
 	return nil
 }
 
-func (m mockLotusMount) FetchUnsealedPiece(ctx context.Context, pieceCid cid.Cid) (io.ReadCloser, error) {
+func (m mockLotusMount) FetchUnsealedPiece(context.Context, cid.Cid) (mount.Reader, error) {
 	panic("implement me")
 }
 

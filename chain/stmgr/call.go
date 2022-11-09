@@ -5,17 +5,21 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/filecoin-project/lotus/chain/rand"
-
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/crypto"
+
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/rand"
+	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 )
@@ -26,9 +30,9 @@ var ErrExpensiveFork = errors.New("refusing explicit call due to state fork at e
 // tipset's parent. In the presence of null blocks, the height at which the message is invoked may
 // be less than the specified tipset.
 //
-// - If no tipset is specified, the first tipset without an expensive migration is used.
-// - If executing a message at a given tipset would trigger an expensive migration, the call will
-//   fail with ErrExpensiveFork.
+//   - If no tipset is specified, the first tipset without an expensive migration is used.
+//   - If executing a message at a given tipset would trigger an expensive migration, the call will
+//     fail with ErrExpensiveFork.
 func (sm *StateManager) Call(ctx context.Context, msg *types.Message, ts *types.TipSet) (*api.InvocResult, error) {
 	ctx, span := trace.StartSpan(ctx, "statemanager.Call")
 	defer span.End()
@@ -40,7 +44,7 @@ func (sm *StateManager) Call(ctx context.Context, msg *types.Message, ts *types.
 		ts = sm.cs.GetHeaviestTipSet()
 		// Search back till we find a height with no fork, or we reach the beginning.
 		for ts.Height() > 0 {
-			pts, err := sm.cs.GetTipSetFromKey(ts.Parents())
+			pts, err := sm.cs.GetTipSetFromKey(ctx, ts.Parents())
 			if err != nil {
 				return nil, xerrors.Errorf("failed to find a non-forking epoch: %w", err)
 			}
@@ -51,7 +55,7 @@ func (sm *StateManager) Call(ctx context.Context, msg *types.Message, ts *types.
 			ts = pts
 		}
 	} else if ts.Height() > 0 {
-		pts, err := sm.cs.LoadTipSet(ts.Parents())
+		pts, err := sm.cs.LoadTipSet(ctx, ts.Parents())
 		if err != nil {
 			return nil, xerrors.Errorf("failed to load parent tipset: %w", err)
 		}
@@ -64,6 +68,8 @@ func (sm *StateManager) Call(ctx context.Context, msg *types.Message, ts *types.
 		pheight = ts.Height() - 1
 	}
 
+	// Since we're simulating a future message, pretend we're applying it in the "next" tipset
+	vmHeight := pheight + 1
 	bstate := ts.ParentState()
 
 	// Run the (not expensive) migration.
@@ -74,15 +80,16 @@ func (sm *StateManager) Call(ctx context.Context, msg *types.Message, ts *types.
 
 	vmopt := &vm.VMOpts{
 		StateBase:      bstate,
-		Epoch:          pheight + 1,
-		Rand:           rand.NewStateRand(sm.cs, ts.Cids(), sm.beacon),
+		Epoch:          vmHeight,
+		Rand:           rand.NewStateRand(sm.cs, ts.Cids(), sm.beacon, sm.GetNetworkVersion),
 		Bstore:         sm.cs.StateBlockstore(),
 		Actors:         sm.tsExec.NewActorRegistry(),
 		Syscalls:       sm.Syscalls,
 		CircSupplyCalc: sm.GetVMCirculatingSupply,
-		NtwkVersion:    sm.GetNtwkVersion,
+		NetworkVersion: sm.GetNetworkVersion(ctx, pheight+1),
 		BaseFee:        types.NewInt(0),
 		LookbackState:  LookbackStateGetterForTipset(sm, ts),
+		Tracing:        true,
 	}
 
 	vmi, err := sm.newVM(ctx, vmopt)
@@ -112,7 +119,12 @@ func (sm *StateManager) Call(ctx context.Context, msg *types.Message, ts *types.
 		)
 	}
 
-	fromActor, err := vmi.StateTree().GetActor(msg.From)
+	stTree, err := sm.StateTree(bstate)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to load state tree: %w", err)
+	}
+
+	fromActor, err := stTree.GetActor(msg.From)
 	if err != nil {
 		return nil, xerrors.Errorf("call raw get actor: %s", err)
 	}
@@ -121,7 +133,7 @@ func (sm *StateManager) Call(ctx context.Context, msg *types.Message, ts *types.
 
 	// TODO: maybe just use the invoker directly?
 	ret, err := vmi.ApplyImplicitMessage(ctx, msg)
-	if err != nil {
+	if err != nil && ret == nil {
 		return nil, xerrors.Errorf("apply message failed: %w", err)
 	}
 
@@ -138,13 +150,16 @@ func (sm *StateManager) Call(ctx context.Context, msg *types.Message, ts *types.
 		ExecutionTrace: ret.ExecutionTrace,
 		Error:          errs,
 		Duration:       ret.Duration,
-	}, nil
-
+	}, err
 }
 
 func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, priorMsgs []types.ChainMsg, ts *types.TipSet) (*api.InvocResult, error) {
 	ctx, span := trace.StartSpan(ctx, "statemanager.CallWithGas")
 	defer span.End()
+
+	// Copy the message as we'll be modifying the nonce.
+	msgCopy := *msg
+	msg = &msgCopy
 
 	if ts == nil {
 		ts = sm.cs.GetHeaviestTipSet()
@@ -155,7 +170,7 @@ func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, pri
 		// height to have no fork, because we'll run it inside this
 		// function before executing the given message.
 		for ts.Height() > 0 {
-			pts, err := sm.cs.GetTipSetFromKey(ts.Parents())
+			pts, err := sm.cs.GetTipSetFromKey(ctx, ts.Parents())
 			if err != nil {
 				return nil, xerrors.Errorf("failed to find a non-forking epoch: %w", err)
 			}
@@ -166,7 +181,7 @@ func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, pri
 			ts = pts
 		}
 	} else if ts.Height() > 0 {
-		pts, err := sm.cs.GetTipSetFromKey(ts.Parents())
+		pts, err := sm.cs.GetTipSetFromKey(ctx, ts.Parents())
 		if err != nil {
 			return nil, xerrors.Errorf("failed to find a non-forking epoch: %w", err)
 		}
@@ -175,18 +190,21 @@ func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, pri
 		}
 	}
 
-	state, _, err := sm.TipSetState(ctx, ts)
+	// Since we're simulating a future message, pretend we're applying it in the "next" tipset
+	vmHeight := ts.Height() + 1
+
+	stateCid, _, err := sm.TipSetState(ctx, ts)
 	if err != nil {
 		return nil, xerrors.Errorf("computing tipset state: %w", err)
 	}
 
 	// Technically, the tipset we're passing in here should be ts+1, but that may not exist.
-	state, err = sm.HandleStateForks(ctx, state, ts.Height(), nil, ts)
+	stateCid, err = sm.HandleStateForks(ctx, stateCid, ts.Height(), nil, ts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to handle fork: %w", err)
 	}
 
-	r := rand.NewStateRand(sm.cs, ts.Cids(), sm.beacon)
+	r := rand.NewStateRand(sm.cs, ts.Cids(), sm.beacon, sm.GetNetworkVersion)
 
 	if span.IsRecordingEvents() {
 		span.AddAttributes(
@@ -196,17 +214,19 @@ func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, pri
 		)
 	}
 
+	buffStore := blockstore.NewTieredBstore(sm.cs.StateBlockstore(), blockstore.NewMemorySync())
 	vmopt := &vm.VMOpts{
-		StateBase:      state,
-		Epoch:          ts.Height() + 1,
+		StateBase:      stateCid,
+		Epoch:          vmHeight,
 		Rand:           r,
-		Bstore:         sm.cs.StateBlockstore(),
+		Bstore:         buffStore,
 		Actors:         sm.tsExec.NewActorRegistry(),
 		Syscalls:       sm.Syscalls,
 		CircSupplyCalc: sm.GetVMCirculatingSupply,
-		NtwkVersion:    sm.GetNtwkVersion,
+		NetworkVersion: sm.GetNetworkVersion(ctx, ts.Height()+1),
 		BaseFee:        ts.Blocks()[0].ParentBaseFee,
 		LookbackState:  LookbackStateGetterForTipset(sm, ts),
+		Tracing:        true,
 	}
 	vmi, err := sm.newVM(ctx, vmopt)
 	if err != nil {
@@ -219,7 +239,19 @@ func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, pri
 		}
 	}
 
-	fromActor, err := vmi.StateTree().GetActor(msg.From)
+	// We flush to get the VM's view of the state tree after applying the above messages
+	// This is needed to get the correct nonce from the actor state to match the VM
+	stateCid, err = vmi.Flush(ctx)
+	if err != nil {
+		return nil, xerrors.Errorf("flushing vm: %w", err)
+	}
+
+	stTree, err := state.LoadStateTree(cbor.NewCborStore(buffStore), stateCid)
+	if err != nil {
+		return nil, xerrors.Errorf("loading state tree: %w", err)
+	}
+
+	fromActor, err := stTree.GetActor(msg.From)
 	if err != nil {
 		return nil, xerrors.Errorf("call raw get actor: %s", err)
 	}
@@ -247,9 +279,21 @@ func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, pri
 
 	}
 
+	// If the fee cap is set to zero, make gas free.
+	if msg.GasFeeCap.NilOrZero() {
+		// Now estimate with a new VM with no base fee.
+		vmopt.BaseFee = big.Zero()
+		vmopt.StateBase = stateCid
+
+		vmi, err = sm.newVM(ctx, vmopt)
+		if err != nil {
+			return nil, xerrors.Errorf("failed to set up estimation vm: %w", err)
+		}
+	}
+
 	ret, err := vmi.ApplyMessage(ctx, msgApply)
 	if err != nil {
-		return nil, xerrors.Errorf("apply message failed: %w", err)
+		return nil, xerrors.Errorf("gas estimation failed: %w", err)
 	}
 
 	var errs string
@@ -275,7 +319,7 @@ func (sm *StateManager) Replay(ctx context.Context, ts *types.TipSet, mcid cid.C
 	// message to find
 	finder.mcid = mcid
 
-	_, _, err := sm.tsExec.ExecuteTipSet(ctx, sm, ts, &finder)
+	_, _, err := sm.tsExec.ExecuteTipSet(ctx, sm, ts, &finder, true)
 	if err != nil && !xerrors.Is(err, errHaltExecution) {
 		return nil, nil, xerrors.Errorf("unexpected error during execution: %w", err)
 	}

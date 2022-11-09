@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
+	"github.com/ipfs/go-cid"
 	"github.com/urfave/cli/v2"
 
 	"github.com/filecoin-project/lotus/api"
@@ -17,10 +19,12 @@ var dagstoreCmd = &cli.Command{
 	Usage: "Manage the dagstore on the markets subsystem",
 	Subcommands: []*cli.Command{
 		dagstoreListShardsCmd,
+		dagstoreRegisterShardCmd,
 		dagstoreInitializeShardCmd,
 		dagstoreRecoverShardCmd,
 		dagstoreInitializeAllCmd,
 		dagstoreGcCmd,
+		dagstoreLookupPiecesCmd,
 	},
 }
 
@@ -52,38 +56,46 @@ var dagstoreListShardsCmd = &cli.Command{
 			return err
 		}
 
-		if len(shards) == 0 {
-			return nil
+		return printTableShards(shards)
+	},
+}
+
+var dagstoreRegisterShardCmd = &cli.Command{
+	Name:      "register-shard",
+	ArgsUsage: "[key]",
+	Usage:     "Register a shard",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:        "color",
+			Usage:       "use color in display output",
+			DefaultText: "depends on output being a TTY",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		if cctx.IsSet("color") {
+			color.NoColor = !cctx.Bool("color")
 		}
 
-		tw := tablewriter.New(
-			tablewriter.Col("Key"),
-			tablewriter.Col("State"),
-			tablewriter.Col("Error"),
-		)
-
-		colors := map[string]color.Attribute{
-			"ShardStateAvailable": color.FgGreen,
-			"ShardStateServing":   color.FgBlue,
-			"ShardStateErrored":   color.FgRed,
-			"ShardStateNew":       color.FgYellow,
+		if cctx.NArg() != 1 {
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
-		for _, s := range shards {
-			m := map[string]interface{}{
-				"Key": s.Key,
-				"State": func() string {
-					if c, ok := colors[s.State]; ok {
-						return color.New(c).Sprint(s.State)
-					}
-					return s.State
-				}(),
-				"Error": s.Error,
-			}
-			tw.Write(m)
+		marketsAPI, closer, err := lcli.GetMarketsAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		shardKey := cctx.Args().First()
+		err = marketsAPI.DagstoreRegisterShard(ctx, shardKey)
+		if err != nil {
+			return err
 		}
 
-		return tw.Flush(os.Stdout)
+		fmt.Println("Registered shard " + shardKey)
+		return nil
 	},
 }
 
@@ -104,7 +116,7 @@ var dagstoreInitializeShardCmd = &cli.Command{
 		}
 
 		if cctx.NArg() != 1 {
-			return fmt.Errorf("must provide a single shard key")
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		marketsApi, closer, err := lcli.GetMarketsAPI(cctx)
@@ -136,7 +148,7 @@ var dagstoreRecoverShardCmd = &cli.Command{
 		}
 
 		if cctx.NArg() != 1 {
-			return fmt.Errorf("must provide a single shard key")
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		marketsApi, closer, err := lcli.GetMarketsAPI(cctx)
@@ -263,5 +275,83 @@ var dagstoreGcCmd = &cli.Command{
 		}
 
 		return nil
+	},
+}
+
+func printTableShards(shards []api.DagstoreShardInfo) error {
+	if len(shards) == 0 {
+		return nil
+	}
+
+	tw := tablewriter.New(
+		tablewriter.Col("Key"),
+		tablewriter.Col("State"),
+		tablewriter.Col("Error"),
+	)
+
+	colors := map[string]color.Attribute{
+		"ShardStateAvailable": color.FgGreen,
+		"ShardStateServing":   color.FgBlue,
+		"ShardStateErrored":   color.FgRed,
+		"ShardStateNew":       color.FgYellow,
+	}
+
+	for _, s := range shards {
+		m := map[string]interface{}{
+			"Key": s.Key,
+			"State": func() string {
+				trimmedState := strings.TrimPrefix(s.State, "ShardState")
+				if c, ok := colors[s.State]; ok {
+					return color.New(c).Sprint(trimmedState)
+				}
+				return trimmedState
+			}(),
+			"Error": s.Error,
+		}
+		tw.Write(m)
+	}
+	return tw.Flush(os.Stdout)
+}
+
+var dagstoreLookupPiecesCmd = &cli.Command{
+	Name:      "lookup-pieces",
+	Usage:     "Lookup pieces that a given CID belongs to",
+	ArgsUsage: "<cid>",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:        "color",
+			Usage:       "use color in display output",
+			DefaultText: "depends on output being a TTY",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		if cctx.IsSet("color") {
+			color.NoColor = !cctx.Bool("color")
+		}
+
+		if cctx.NArg() != 1 {
+			return lcli.IncorrectNumArgs(cctx)
+		}
+
+		cidStr := cctx.Args().First()
+		cid, err := cid.Parse(cidStr)
+		if err != nil {
+			return fmt.Errorf("invalid CID: %w", err)
+		}
+
+		marketsApi, closer, err := lcli.GetMarketsAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		shards, err := marketsApi.DagstoreLookupPieces(ctx, cid)
+		if err != nil {
+			return err
+		}
+
+		return printTableShards(shards)
 	},
 }

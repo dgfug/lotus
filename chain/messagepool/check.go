@@ -10,6 +10,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
@@ -106,7 +107,7 @@ func (mp *MessagePool) checkMessages(ctx context.Context, msgs []*types.Message,
 	curTs := mp.curTs
 	mp.curTsLk.Unlock()
 
-	epoch := curTs.Height()
+	epoch := curTs.Height() + 1
 
 	var baseFee big.Int
 	if len(curTs.Blocks()) > 0 {

@@ -5,26 +5,31 @@ package v0api
 import (
 	"context"
 
+	blocks "github.com/ipfs/go-block-format"
+	"github.com/ipfs/go-cid"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/builtin/v8/paych"
+	"github.com/filecoin-project/go-state-types/builtin/v9/miner"
+	verifregtypes "github.com/filecoin-project/go-state-types/builtin/v9/verifreg"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/dline"
-	"github.com/filecoin-project/go-state-types/network"
+	abinetwork "github.com/filecoin-project/go-state-types/network"
+
 	"github.com/filecoin-project/lotus/api"
 	apitypes "github.com/filecoin-project/lotus/api/types"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
+	lminer "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/types"
 	marketevents "github.com/filecoin-project/lotus/markets/loggers"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/repo/imports"
-	"github.com/ipfs/go-cid"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"golang.org/x/xerrors"
 )
 
 var ErrNotSupported = xerrors.New("method not supported")
@@ -72,6 +77,8 @@ type FullNodeStruct struct {
 		ChainHead func(p0 context.Context) (*types.TipSet, error) `perm:"read"`
 
 		ChainNotify func(p0 context.Context) (<-chan []*api.HeadChange, error) `perm:"read"`
+
+		ChainPutObj func(p0 context.Context, p1 blocks.Block) error ``
 
 		ChainReadObj func(p0 context.Context, p1 cid.Cid) ([]byte, error) `perm:"read"`
 
@@ -125,11 +132,11 @@ type FullNodeStruct struct {
 
 		ClientRestartDataTransfer func(p0 context.Context, p1 datatransfer.TransferID, p2 peer.ID, p3 bool) error `perm:"write"`
 
-		ClientRetrieve func(p0 context.Context, p1 api.RetrievalOrder, p2 *api.FileRef) error `perm:"admin"`
+		ClientRetrieve func(p0 context.Context, p1 RetrievalOrder, p2 *api.FileRef) error `perm:"admin"`
 
 		ClientRetrieveTryRestartInsufficientFunds func(p0 context.Context, p1 address.Address) error `perm:"write"`
 
-		ClientRetrieveWithEvents func(p0 context.Context, p1 api.RetrievalOrder, p2 *api.FileRef) (<-chan marketevents.RetrievalEvent, error) `perm:"admin"`
+		ClientRetrieveWithEvents func(p0 context.Context, p1 RetrievalOrder, p2 *api.FileRef) (<-chan marketevents.RetrievalEvent, error) `perm:"admin"`
 
 		ClientStartDeal func(p0 context.Context, p1 *api.StartDealParams) (*cid.Cid, error) `perm:"admin"`
 
@@ -251,6 +258,10 @@ type FullNodeStruct struct {
 
 		StateAccountKey func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (address.Address, error) `perm:"read"`
 
+		StateActorCodeCIDs func(p0 context.Context, p1 abinetwork.Version) (map[string]cid.Cid, error) `perm:"read"`
+
+		StateActorManifestCID func(p0 context.Context, p1 abinetwork.Version) (cid.Cid, error) `perm:"read"`
+
 		StateAllMinerFaults func(p0 context.Context, p1 abi.ChainEpoch, p2 types.TipSetKey) ([]*api.Fault, error) `perm:"read"`
 
 		StateCall func(p0 context.Context, p1 *types.Message, p2 types.TipSetKey) (*api.InvocResult, error) `perm:"read"`
@@ -266,6 +277,18 @@ type FullNodeStruct struct {
 		StateDecodeParams func(p0 context.Context, p1 address.Address, p2 abi.MethodNum, p3 []byte, p4 types.TipSetKey) (interface{}, error) `perm:"read"`
 
 		StateGetActor func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) `perm:"read"`
+
+		StateGetAllocation func(p0 context.Context, p1 address.Address, p2 verifregtypes.AllocationId, p3 types.TipSetKey) (*verifregtypes.Allocation, error) `perm:"read"`
+
+		StateGetAllocationForPendingDeal func(p0 context.Context, p1 abi.DealID, p2 types.TipSetKey) (*verifregtypes.Allocation, error) `perm:"read"`
+
+		StateGetAllocations func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (map[verifregtypes.AllocationId]verifregtypes.Allocation, error) `perm:"read"`
+
+		StateGetClaim func(p0 context.Context, p1 address.Address, p2 verifregtypes.ClaimId, p3 types.TipSetKey) (*verifregtypes.Claim, error) `perm:"read"`
+
+		StateGetClaims func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (map[verifregtypes.ClaimId]verifregtypes.Claim, error) `perm:"read"`
+
+		StateGetNetworkParams func(p0 context.Context) (*api.NetworkParams, error) `perm:"read"`
 
 		StateGetRandomnessFromBeacon func(p0 context.Context, p1 crypto.DomainSeparationTag, p2 abi.ChainEpoch, p3 []byte, p4 types.TipSetKey) (abi.Randomness, error) `perm:"read"`
 
@@ -283,7 +306,7 @@ type FullNodeStruct struct {
 
 		StateMarketBalance func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (api.MarketBalance, error) `perm:"read"`
 
-		StateMarketDeals func(p0 context.Context, p1 types.TipSetKey) (map[string]api.MarketDeal, error) `perm:"read"`
+		StateMarketDeals func(p0 context.Context, p1 types.TipSetKey) (map[string]*api.MarketDeal, error) `perm:"read"`
 
 		StateMarketParticipants func(p0 context.Context, p1 types.TipSetKey) (map[string]api.MarketBalance, error) `perm:"read"`
 
@@ -297,7 +320,7 @@ type FullNodeStruct struct {
 
 		StateMinerFaults func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (bitfield.BitField, error) `perm:"read"`
 
-		StateMinerInfo func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) `perm:"read"`
+		StateMinerInfo func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (api.MinerInfo, error) `perm:"read"`
 
 		StateMinerInitialPledgeCollateral func(p0 context.Context, p1 address.Address, p2 miner.SectorPreCommitInfo, p3 types.TipSetKey) (types.BigInt, error) `perm:"read"`
 
@@ -329,11 +352,11 @@ type FullNodeStruct struct {
 
 		StateSearchMsgLimited func(p0 context.Context, p1 cid.Cid, p2 abi.ChainEpoch) (*api.MsgLookup, error) `perm:"read"`
 
-		StateSectorExpiration func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorExpiration, error) `perm:"read"`
+		StateSectorExpiration func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorExpiration, error) `perm:"read"`
 
 		StateSectorGetInfo func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorOnChainInfo, error) `perm:"read"`
 
-		StateSectorPartition func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorLocation, error) `perm:"read"`
+		StateSectorPartition func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorLocation, error) `perm:"read"`
 
 		StateSectorPreCommitInfo func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (miner.SectorPreCommitOnChainInfo, error) `perm:"read"`
 
@@ -417,6 +440,8 @@ type GatewayStruct struct {
 
 		ChainNotify func(p0 context.Context) (<-chan []*api.HeadChange, error) ``
 
+		ChainPutObj func(p0 context.Context, p1 blocks.Block) error ``
+
 		ChainReadObj func(p0 context.Context, p1 cid.Cid) ([]byte, error) ``
 
 		GasEstimateMessageGas func(p0 context.Context, p1 *types.Message, p2 *api.MessageSendSpec, p3 types.TipSetKey) (*types.Message, error) ``
@@ -445,13 +470,13 @@ type GatewayStruct struct {
 
 		StateMarketStorageDeal func(p0 context.Context, p1 abi.DealID, p2 types.TipSetKey) (*api.MarketDeal, error) ``
 
-		StateMinerInfo func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) ``
+		StateMinerInfo func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (api.MinerInfo, error) ``
 
 		StateMinerPower func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*api.MinerPower, error) ``
 
 		StateMinerProvingDeadline func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*dline.Info, error) ``
 
-		StateNetworkVersion func(p0 context.Context, p1 types.TipSetKey) (network.Version, error) ``
+		StateNetworkVersion func(p0 context.Context, p1 types.TipSetKey) (abinetwork.Version, error) ``
 
 		StateSearchMsg func(p0 context.Context, p1 cid.Cid) (*api.MsgLookup, error) ``
 
@@ -677,6 +702,17 @@ func (s *FullNodeStruct) ChainNotify(p0 context.Context) (<-chan []*api.HeadChan
 
 func (s *FullNodeStub) ChainNotify(p0 context.Context) (<-chan []*api.HeadChange, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) ChainPutObj(p0 context.Context, p1 blocks.Block) error {
+	if s.Internal.ChainPutObj == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.ChainPutObj(p0, p1)
+}
+
+func (s *FullNodeStub) ChainPutObj(p0 context.Context, p1 blocks.Block) error {
+	return ErrNotSupported
 }
 
 func (s *FullNodeStruct) ChainReadObj(p0 context.Context, p1 cid.Cid) ([]byte, error) {
@@ -965,14 +1001,14 @@ func (s *FullNodeStub) ClientRestartDataTransfer(p0 context.Context, p1 datatran
 	return ErrNotSupported
 }
 
-func (s *FullNodeStruct) ClientRetrieve(p0 context.Context, p1 api.RetrievalOrder, p2 *api.FileRef) error {
+func (s *FullNodeStruct) ClientRetrieve(p0 context.Context, p1 RetrievalOrder, p2 *api.FileRef) error {
 	if s.Internal.ClientRetrieve == nil {
 		return ErrNotSupported
 	}
 	return s.Internal.ClientRetrieve(p0, p1, p2)
 }
 
-func (s *FullNodeStub) ClientRetrieve(p0 context.Context, p1 api.RetrievalOrder, p2 *api.FileRef) error {
+func (s *FullNodeStub) ClientRetrieve(p0 context.Context, p1 RetrievalOrder, p2 *api.FileRef) error {
 	return ErrNotSupported
 }
 
@@ -987,14 +1023,14 @@ func (s *FullNodeStub) ClientRetrieveTryRestartInsufficientFunds(p0 context.Cont
 	return ErrNotSupported
 }
 
-func (s *FullNodeStruct) ClientRetrieveWithEvents(p0 context.Context, p1 api.RetrievalOrder, p2 *api.FileRef) (<-chan marketevents.RetrievalEvent, error) {
+func (s *FullNodeStruct) ClientRetrieveWithEvents(p0 context.Context, p1 RetrievalOrder, p2 *api.FileRef) (<-chan marketevents.RetrievalEvent, error) {
 	if s.Internal.ClientRetrieveWithEvents == nil {
 		return nil, ErrNotSupported
 	}
 	return s.Internal.ClientRetrieveWithEvents(p0, p1, p2)
 }
 
-func (s *FullNodeStub) ClientRetrieveWithEvents(p0 context.Context, p1 api.RetrievalOrder, p2 *api.FileRef) (<-chan marketevents.RetrievalEvent, error) {
+func (s *FullNodeStub) ClientRetrieveWithEvents(p0 context.Context, p1 RetrievalOrder, p2 *api.FileRef) (<-chan marketevents.RetrievalEvent, error) {
 	return nil, ErrNotSupported
 }
 
@@ -1658,6 +1694,28 @@ func (s *FullNodeStub) StateAccountKey(p0 context.Context, p1 address.Address, p
 	return *new(address.Address), ErrNotSupported
 }
 
+func (s *FullNodeStruct) StateActorCodeCIDs(p0 context.Context, p1 abinetwork.Version) (map[string]cid.Cid, error) {
+	if s.Internal.StateActorCodeCIDs == nil {
+		return *new(map[string]cid.Cid), ErrNotSupported
+	}
+	return s.Internal.StateActorCodeCIDs(p0, p1)
+}
+
+func (s *FullNodeStub) StateActorCodeCIDs(p0 context.Context, p1 abinetwork.Version) (map[string]cid.Cid, error) {
+	return *new(map[string]cid.Cid), ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateActorManifestCID(p0 context.Context, p1 abinetwork.Version) (cid.Cid, error) {
+	if s.Internal.StateActorManifestCID == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.StateActorManifestCID(p0, p1)
+}
+
+func (s *FullNodeStub) StateActorManifestCID(p0 context.Context, p1 abinetwork.Version) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
 func (s *FullNodeStruct) StateAllMinerFaults(p0 context.Context, p1 abi.ChainEpoch, p2 types.TipSetKey) ([]*api.Fault, error) {
 	if s.Internal.StateAllMinerFaults == nil {
 		return *new([]*api.Fault), ErrNotSupported
@@ -1743,6 +1801,72 @@ func (s *FullNodeStruct) StateGetActor(p0 context.Context, p1 address.Address, p
 }
 
 func (s *FullNodeStub) StateGetActor(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*types.Actor, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateGetAllocation(p0 context.Context, p1 address.Address, p2 verifregtypes.AllocationId, p3 types.TipSetKey) (*verifregtypes.Allocation, error) {
+	if s.Internal.StateGetAllocation == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.StateGetAllocation(p0, p1, p2, p3)
+}
+
+func (s *FullNodeStub) StateGetAllocation(p0 context.Context, p1 address.Address, p2 verifregtypes.AllocationId, p3 types.TipSetKey) (*verifregtypes.Allocation, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateGetAllocationForPendingDeal(p0 context.Context, p1 abi.DealID, p2 types.TipSetKey) (*verifregtypes.Allocation, error) {
+	if s.Internal.StateGetAllocationForPendingDeal == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.StateGetAllocationForPendingDeal(p0, p1, p2)
+}
+
+func (s *FullNodeStub) StateGetAllocationForPendingDeal(p0 context.Context, p1 abi.DealID, p2 types.TipSetKey) (*verifregtypes.Allocation, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateGetAllocations(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (map[verifregtypes.AllocationId]verifregtypes.Allocation, error) {
+	if s.Internal.StateGetAllocations == nil {
+		return *new(map[verifregtypes.AllocationId]verifregtypes.Allocation), ErrNotSupported
+	}
+	return s.Internal.StateGetAllocations(p0, p1, p2)
+}
+
+func (s *FullNodeStub) StateGetAllocations(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (map[verifregtypes.AllocationId]verifregtypes.Allocation, error) {
+	return *new(map[verifregtypes.AllocationId]verifregtypes.Allocation), ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateGetClaim(p0 context.Context, p1 address.Address, p2 verifregtypes.ClaimId, p3 types.TipSetKey) (*verifregtypes.Claim, error) {
+	if s.Internal.StateGetClaim == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.StateGetClaim(p0, p1, p2, p3)
+}
+
+func (s *FullNodeStub) StateGetClaim(p0 context.Context, p1 address.Address, p2 verifregtypes.ClaimId, p3 types.TipSetKey) (*verifregtypes.Claim, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateGetClaims(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (map[verifregtypes.ClaimId]verifregtypes.Claim, error) {
+	if s.Internal.StateGetClaims == nil {
+		return *new(map[verifregtypes.ClaimId]verifregtypes.Claim), ErrNotSupported
+	}
+	return s.Internal.StateGetClaims(p0, p1, p2)
+}
+
+func (s *FullNodeStub) StateGetClaims(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (map[verifregtypes.ClaimId]verifregtypes.Claim, error) {
+	return *new(map[verifregtypes.ClaimId]verifregtypes.Claim), ErrNotSupported
+}
+
+func (s *FullNodeStruct) StateGetNetworkParams(p0 context.Context) (*api.NetworkParams, error) {
+	if s.Internal.StateGetNetworkParams == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.StateGetNetworkParams(p0)
+}
+
+func (s *FullNodeStub) StateGetNetworkParams(p0 context.Context) (*api.NetworkParams, error) {
 	return nil, ErrNotSupported
 }
 
@@ -1834,15 +1958,15 @@ func (s *FullNodeStub) StateMarketBalance(p0 context.Context, p1 address.Address
 	return *new(api.MarketBalance), ErrNotSupported
 }
 
-func (s *FullNodeStruct) StateMarketDeals(p0 context.Context, p1 types.TipSetKey) (map[string]api.MarketDeal, error) {
+func (s *FullNodeStruct) StateMarketDeals(p0 context.Context, p1 types.TipSetKey) (map[string]*api.MarketDeal, error) {
 	if s.Internal.StateMarketDeals == nil {
-		return *new(map[string]api.MarketDeal), ErrNotSupported
+		return *new(map[string]*api.MarketDeal), ErrNotSupported
 	}
 	return s.Internal.StateMarketDeals(p0, p1)
 }
 
-func (s *FullNodeStub) StateMarketDeals(p0 context.Context, p1 types.TipSetKey) (map[string]api.MarketDeal, error) {
-	return *new(map[string]api.MarketDeal), ErrNotSupported
+func (s *FullNodeStub) StateMarketDeals(p0 context.Context, p1 types.TipSetKey) (map[string]*api.MarketDeal, error) {
+	return *new(map[string]*api.MarketDeal), ErrNotSupported
 }
 
 func (s *FullNodeStruct) StateMarketParticipants(p0 context.Context, p1 types.TipSetKey) (map[string]api.MarketBalance, error) {
@@ -1911,15 +2035,15 @@ func (s *FullNodeStub) StateMinerFaults(p0 context.Context, p1 address.Address, 
 	return *new(bitfield.BitField), ErrNotSupported
 }
 
-func (s *FullNodeStruct) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) {
+func (s *FullNodeStruct) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (api.MinerInfo, error) {
 	if s.Internal.StateMinerInfo == nil {
-		return *new(miner.MinerInfo), ErrNotSupported
+		return *new(api.MinerInfo), ErrNotSupported
 	}
 	return s.Internal.StateMinerInfo(p0, p1, p2)
 }
 
-func (s *FullNodeStub) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) {
-	return *new(miner.MinerInfo), ErrNotSupported
+func (s *FullNodeStub) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (api.MinerInfo, error) {
+	return *new(api.MinerInfo), ErrNotSupported
 }
 
 func (s *FullNodeStruct) StateMinerInitialPledgeCollateral(p0 context.Context, p1 address.Address, p2 miner.SectorPreCommitInfo, p3 types.TipSetKey) (types.BigInt, error) {
@@ -2087,14 +2211,14 @@ func (s *FullNodeStub) StateSearchMsgLimited(p0 context.Context, p1 cid.Cid, p2 
 	return nil, ErrNotSupported
 }
 
-func (s *FullNodeStruct) StateSectorExpiration(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorExpiration, error) {
+func (s *FullNodeStruct) StateSectorExpiration(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorExpiration, error) {
 	if s.Internal.StateSectorExpiration == nil {
 		return nil, ErrNotSupported
 	}
 	return s.Internal.StateSectorExpiration(p0, p1, p2, p3)
 }
 
-func (s *FullNodeStub) StateSectorExpiration(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorExpiration, error) {
+func (s *FullNodeStub) StateSectorExpiration(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorExpiration, error) {
 	return nil, ErrNotSupported
 }
 
@@ -2109,14 +2233,14 @@ func (s *FullNodeStub) StateSectorGetInfo(p0 context.Context, p1 address.Address
 	return nil, ErrNotSupported
 }
 
-func (s *FullNodeStruct) StateSectorPartition(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorLocation, error) {
+func (s *FullNodeStruct) StateSectorPartition(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorLocation, error) {
 	if s.Internal.StateSectorPartition == nil {
 		return nil, ErrNotSupported
 	}
 	return s.Internal.StateSectorPartition(p0, p1, p2, p3)
 }
 
-func (s *FullNodeStub) StateSectorPartition(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorLocation, error) {
+func (s *FullNodeStub) StateSectorPartition(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorLocation, error) {
 	return nil, ErrNotSupported
 }
 
@@ -2516,6 +2640,17 @@ func (s *GatewayStub) ChainNotify(p0 context.Context) (<-chan []*api.HeadChange,
 	return nil, ErrNotSupported
 }
 
+func (s *GatewayStruct) ChainPutObj(p0 context.Context, p1 blocks.Block) error {
+	if s.Internal.ChainPutObj == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.ChainPutObj(p0, p1)
+}
+
+func (s *GatewayStub) ChainPutObj(p0 context.Context, p1 blocks.Block) error {
+	return ErrNotSupported
+}
+
 func (s *GatewayStruct) ChainReadObj(p0 context.Context, p1 cid.Cid) ([]byte, error) {
 	if s.Internal.ChainReadObj == nil {
 		return *new([]byte), ErrNotSupported
@@ -2670,15 +2805,15 @@ func (s *GatewayStub) StateMarketStorageDeal(p0 context.Context, p1 abi.DealID, 
 	return nil, ErrNotSupported
 }
 
-func (s *GatewayStruct) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) {
+func (s *GatewayStruct) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (api.MinerInfo, error) {
 	if s.Internal.StateMinerInfo == nil {
-		return *new(miner.MinerInfo), ErrNotSupported
+		return *new(api.MinerInfo), ErrNotSupported
 	}
 	return s.Internal.StateMinerInfo(p0, p1, p2)
 }
 
-func (s *GatewayStub) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) {
-	return *new(miner.MinerInfo), ErrNotSupported
+func (s *GatewayStub) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (api.MinerInfo, error) {
+	return *new(api.MinerInfo), ErrNotSupported
 }
 
 func (s *GatewayStruct) StateMinerPower(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*api.MinerPower, error) {
@@ -2703,15 +2838,15 @@ func (s *GatewayStub) StateMinerProvingDeadline(p0 context.Context, p1 address.A
 	return nil, ErrNotSupported
 }
 
-func (s *GatewayStruct) StateNetworkVersion(p0 context.Context, p1 types.TipSetKey) (network.Version, error) {
+func (s *GatewayStruct) StateNetworkVersion(p0 context.Context, p1 types.TipSetKey) (abinetwork.Version, error) {
 	if s.Internal.StateNetworkVersion == nil {
-		return *new(network.Version), ErrNotSupported
+		return *new(abinetwork.Version), ErrNotSupported
 	}
 	return s.Internal.StateNetworkVersion(p0, p1)
 }
 
-func (s *GatewayStub) StateNetworkVersion(p0 context.Context, p1 types.TipSetKey) (network.Version, error) {
-	return *new(network.Version), ErrNotSupported
+func (s *GatewayStub) StateNetworkVersion(p0 context.Context, p1 types.TipSetKey) (abinetwork.Version, error) {
+	return *new(abinetwork.Version), ErrNotSupported
 }
 
 func (s *GatewayStruct) StateSearchMsg(p0 context.Context, p1 cid.Cid) (*api.MsgLookup, error) {

@@ -3,13 +3,16 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"runtime"
 	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/multiformats/go-multiaddr"
@@ -23,10 +26,12 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/api/v1api"
+	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/lib/rpcenc"
 	"github.com/filecoin-project/lotus/metrics"
 	"github.com/filecoin-project/lotus/metrics/proxy"
 	"github.com/filecoin-project/lotus/node/impl"
+	"github.com/filecoin-project/lotus/node/impl/client"
 )
 
 var rpclog = logging.Logger("rpc")
@@ -68,8 +73,9 @@ func FullNodeHandler(a v1api.FullNode, permissioned bool, opts ...jsonrpc.Server
 	m := mux.NewRouter()
 
 	serveRpc := func(path string, hnd interface{}) {
-		rpcServer := jsonrpc.NewServer(opts...)
+		rpcServer := jsonrpc.NewServer(append(opts, jsonrpc.WithServerErrors(api.RPCErrors))...)
 		rpcServer.Register("Filecoin", hnd)
+		rpcServer.AliasMethod("rpc.discover", "Filecoin.Discover")
 
 		var handler http.Handler = rpcServer
 		if permissioned {
@@ -89,14 +95,30 @@ func FullNodeHandler(a v1api.FullNode, permissioned bool, opts ...jsonrpc.Server
 
 	// Import handler
 	handleImportFunc := handleImport(a.(*impl.FullNodeAPI))
+	handleExportFunc := handleExport(a.(*impl.FullNodeAPI))
+	handleRemoteStoreFunc := handleRemoteStore(a.(*impl.FullNodeAPI))
 	if permissioned {
 		importAH := &auth.Handler{
 			Verify: a.AuthVerify,
 			Next:   handleImportFunc,
 		}
 		m.Handle("/rest/v0/import", importAH)
+
+		exportAH := &auth.Handler{
+			Verify: a.AuthVerify,
+			Next:   handleExportFunc,
+		}
+		m.Handle("/rest/v0/export", exportAH)
+
+		storeAH := &auth.Handler{
+			Verify: a.AuthVerify,
+			Next:   handleRemoteStoreFunc,
+		}
+		m.Handle("/rest/v0/store/{uuid}", storeAH)
 	} else {
 		m.HandleFunc("/rest/v0/import", handleImportFunc)
+		m.HandleFunc("/rest/v0/export", handleExportFunc)
+		m.HandleFunc("/rest/v0/store/{uuid}", handleRemoteStoreFunc)
 	}
 
 	// debugging
@@ -105,6 +127,8 @@ func FullNodeHandler(a v1api.FullNode, permissioned bool, opts ...jsonrpc.Server
 	m.Handle("/debug/pprof-set/mutex", handleFractionOpt("MutexProfileFraction", func(x int) {
 		runtime.SetMutexProfileFraction(x)
 	}))
+	m.Handle("/health/livez", NewLiveHandler(a))
+	m.Handle("/health/readyz", NewReadyHandler(a))
 	m.PathPrefix("/").Handler(http.DefaultServeMux) // pprof
 
 	return m, nil
@@ -112,34 +136,55 @@ func FullNodeHandler(a v1api.FullNode, permissioned bool, opts ...jsonrpc.Server
 
 // MinerHandler returns a miner handler, to be mounted as-is on the server.
 func MinerHandler(a api.StorageMiner, permissioned bool) (http.Handler, error) {
-	m := mux.NewRouter()
-
 	mapi := proxy.MetricedStorMinerAPI(a)
 	if permissioned {
 		mapi = api.PermissionedStorMinerAPI(mapi)
 	}
 
 	readerHandler, readerServerOpt := rpcenc.ReaderParamDecoder()
-	rpcServer := jsonrpc.NewServer(readerServerOpt)
+	rpcServer := jsonrpc.NewServer(jsonrpc.WithServerErrors(api.RPCErrors), readerServerOpt)
 	rpcServer.Register("Filecoin", mapi)
+	rpcServer.AliasMethod("rpc.discover", "Filecoin.Discover")
 
-	m.Handle("/rpc/v0", rpcServer)
-	m.Handle("/rpc/streams/v0/push/{uuid}", readerHandler)
-	m.PathPrefix("/remote").HandlerFunc(a.(*impl.StorageMinerAPI).ServeRemote(permissioned))
+	rootMux := mux.NewRouter()
 
-	// debugging
-	m.Handle("/debug/metrics", metrics.Exporter())
-	m.PathPrefix("/").Handler(http.DefaultServeMux) // pprof
+	// remote storage
+	{
+		m := mux.NewRouter()
+		m.PathPrefix("/remote").HandlerFunc(a.(*impl.StorageMinerAPI).ServeRemote(permissioned))
 
-	if !permissioned {
-		return m, nil
+		var hnd http.Handler = m
+		if permissioned {
+			hnd = &auth.Handler{
+				Verify: a.StorageAuthVerify,
+				Next:   m.ServeHTTP,
+			}
+		}
+
+		rootMux.PathPrefix("/remote").Handler(hnd)
 	}
 
-	ah := &auth.Handler{
-		Verify: a.AuthVerify,
-		Next:   m.ServeHTTP,
+	// local APIs
+	{
+		m := mux.NewRouter()
+		m.Handle("/rpc/v0", rpcServer)
+		m.Handle("/rpc/streams/v0/push/{uuid}", readerHandler)
+		// debugging
+		m.Handle("/debug/metrics", metrics.Exporter())
+		m.PathPrefix("/").Handler(http.DefaultServeMux) // pprof
+
+		var hnd http.Handler = m
+		if permissioned {
+			hnd = &auth.Handler{
+				Verify: a.AuthVerify,
+				Next:   m.ServeHTTP,
+			}
+		}
+
+		rootMux.PathPrefix("/").Handler(hnd)
 	}
-	return ah, nil
+
+	return rootMux, nil
 }
 
 func handleImport(a *impl.FullNodeAPI) func(w http.ResponseWriter, r *http.Request) {
@@ -169,6 +214,34 @@ func handleImport(a *impl.FullNodeAPI) func(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+func handleExport(a *impl.FullNodeAPI) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			w.WriteHeader(404)
+			return
+		}
+		if !auth.HasPerm(r.Context(), nil, api.PermWrite) {
+			w.WriteHeader(401)
+			_ = json.NewEncoder(w).Encode(struct{ Error string }{"unauthorized: missing write permission"})
+			return
+		}
+
+		var eref api.ExportRef
+		if err := json.Unmarshal([]byte(r.FormValue("export")), &eref); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		car := r.FormValue("car") == "true"
+
+		err := a.ClientExportInto(r.Context(), eref, car, client.ExportDest{Writer: w})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
 func handleFractionOpt(name string, setter func(int)) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -193,5 +266,36 @@ func handleFractionOpt(name string, setter func(int)) http.HandlerFunc {
 		}
 		rpclog.Infof("setting %s to %d", name, fr)
 		setter(fr)
+	}
+}
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+func handleRemoteStore(a *impl.FullNodeAPI) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		id, err := uuid.Parse(vars["uuid"])
+		if err != nil {
+			http.Error(w, fmt.Sprintf("parse uuid: %s", err), http.StatusBadRequest)
+			return
+		}
+
+		c, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Error(err)
+			w.WriteHeader(500)
+			return
+		}
+
+		nstore := bstore.NewNetworkStoreWS(c)
+		if err := a.ApiBlockstoreAccessor.RegisterApiStore(id, nstore); err != nil {
+			log.Errorw("registering api bstore", "error", err)
+			_ = c.Close()
+			return
+		}
 	}
 }

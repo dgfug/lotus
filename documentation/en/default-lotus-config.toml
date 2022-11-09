@@ -15,12 +15,21 @@
 
 
 [Backup]
+  # When set to true disables metadata log (.lotus/kvlog). This can save disk
+  # space by reducing metadata redundancy.
+  # 
   # Note that in case of metadata corruption it might be much harder to recover
   # your node if metadata log is disabled
   #
   # type: bool
   # env var: LOTUS_BACKUP_DISABLEMETADATALOG
-  #DisableMetadataLog = false
+  #DisableMetadataLog = true
+
+
+[Logging]
+  [Logging.SubsystemLevels]
+    # env var: LOTUS_LOGGING_SUBSYSTEMLEVELS_EXAMPLE-SUBSYSTEM
+    #example-subsystem = "INFO"
 
 
 [Libp2p]
@@ -121,6 +130,14 @@
   # env var: LOTUS_CLIENT_SIMULTANEOUSTRANSFERSFORRETRIEVAL
   #SimultaneousTransfersForRetrieval = 20
 
+  # Require that retrievals perform no on-chain operations. Paid retrievals
+  # without existing payment channels with available funds will fail instead
+  # of automatically performing on-chain operations.
+  #
+  # type: bool
+  # env var: LOTUS_CLIENT_OFFCHAINRETRIEVAL
+  #OffChainRetrieval = false
+
 
 [Wallet]
   # type: string
@@ -149,11 +166,11 @@
 
   [Chainstore.Splitstore]
     # ColdStoreType specifies the type of the coldstore.
-    # It can be "universal" (default) or "discard" for discarding cold blocks.
+    # It can be "messages" (default) to store only messages, "universal" to store all chain state or "discard" for discarding cold blocks.
     #
     # type: string
     # env var: LOTUS_CHAINSTORE_SPLITSTORE_COLDSTORETYPE
-    #ColdStoreType = "universal"
+    #ColdStoreType = "messages"
 
     # HotStoreType specifies the type of the hotstore.
     # Only currently supported value is "badger".
@@ -163,11 +180,11 @@
     #HotStoreType = "badger"
 
     # MarkSetType specifies the type of the markset.
-    # It can be "map" (default) for in memory marking or "badger" for on-disk marking.
+    # It can be "map" for in memory marking or "badger" (default) for on-disk marking.
     #
     # type: string
     # env var: LOTUS_CHAINSTORE_SPLITSTORE_MARKSETTYPE
-    #MarkSetType = "map"
+    #MarkSetType = "badger"
 
     # HotStoreMessageRetention specifies the retention policy for messages, in finalities beyond
     # the compaction boundary; default is 0.

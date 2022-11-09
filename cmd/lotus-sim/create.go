@@ -26,17 +26,12 @@ var createSimCommand = &cli.Command{
 		var ts *types.TipSet
 		switch cctx.NArg() {
 		case 0:
-			if err := node.Chainstore.Load(); err != nil {
+			if err := node.Chainstore.Load(cctx.Context); err != nil {
 				return err
 			}
 			ts = node.Chainstore.GetHeaviestTipSet()
 		case 1:
-			cids, err := lcli.ParseTipSetString(cctx.Args().Get(1))
-			if err != nil {
-				return err
-			}
-			tsk := types.NewTipSetKey(cids...)
-			ts, err = node.Chainstore.LoadTipSet(tsk)
+			ts, err = lcli.ParseTipSetRefOffline(cctx.Context, node.Chainstore, cctx.Args().Get(1))
 			if err != nil {
 				return err
 			}

@@ -5,7 +5,8 @@ import (
 	"context"
 	"os"
 
-	"github.com/filecoin-project/lotus/chain/rand"
+	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
@@ -13,8 +14,6 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/network"
-	cid "github.com/ipfs/go-cid"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
@@ -22,10 +21,12 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/verifreg"
 	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 func GetMinerWorkerRaw(ctx context.Context, sm *StateManager, st cid.Cid, maddr address.Address) (address.Address, error) {
@@ -116,7 +117,7 @@ func MinerSectorInfo(ctx context.Context, sm *StateManager, maddr address.Addres
 	return mas.GetSector(sid)
 }
 
-func GetSectorsForWinningPoSt(ctx context.Context, nv network.Version, pv ffiwrapper.Verifier, sm *StateManager, st cid.Cid, maddr address.Address, rand abi.PoStRandomness) ([]builtin.SectorInfo, error) {
+func GetSectorsForWinningPoSt(ctx context.Context, nv network.Version, pv storiface.Verifier, sm *StateManager, st cid.Cid, maddr address.Address, rand abi.PoStRandomness) ([]builtin.ExtendedSectorInfo, error) {
 	act, err := sm.LoadActorRaw(ctx, maddr, st)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load miner actor: %w", err)
@@ -202,12 +203,13 @@ func GetSectorsForWinningPoSt(ctx context.Context, nv network.Version, pv ffiwra
 		return nil, xerrors.Errorf("loading proving sectors: %w", err)
 	}
 
-	out := make([]builtin.SectorInfo, len(sectors))
+	out := make([]builtin.ExtendedSectorInfo, len(sectors))
 	for i, sinfo := range sectors {
-		out[i] = builtin.SectorInfo{
+		out[i] = builtin.ExtendedSectorInfo{
 			SealProof:    sinfo.SealProof,
 			SectorNumber: sinfo.SectorNumber,
 			SealedCID:    sinfo.SealedCID,
+			SectorKey:    sinfo.SectorKeyCID,
 		}
 	}
 
@@ -250,13 +252,13 @@ func GetStorageDeal(ctx context.Context, sm *StateManager, dealID abi.DealID, ts
 
 	proposals, err := state.Proposals()
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to get proposals from state : %w", err)
 	}
 
 	proposal, found, err := proposals.Get(dealID)
 
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to get proposal : %w", err)
 	} else if !found {
 		return nil, xerrors.Errorf(
 			"deal %d not found "+
@@ -267,12 +269,12 @@ func GetStorageDeal(ctx context.Context, sm *StateManager, dealID abi.DealID, ts
 
 	states, err := state.States()
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to get states : %w", err)
 	}
 
 	st, found, err := states.Get(dealID)
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to get state : %w", err)
 	}
 
 	if !found {
@@ -299,13 +301,13 @@ func ListMinerActors(ctx context.Context, sm *StateManager, ts *types.TipSet) ([
 	return powState.ListAllMiners()
 }
 
-func MinerGetBaseInfo(ctx context.Context, sm *StateManager, bcs beacon.Schedule, tsk types.TipSetKey, round abi.ChainEpoch, maddr address.Address, pv ffiwrapper.Verifier) (*api.MiningBaseInfo, error) {
-	ts, err := sm.ChainStore().LoadTipSet(tsk)
+func MinerGetBaseInfo(ctx context.Context, sm *StateManager, bcs beacon.Schedule, tsk types.TipSetKey, round abi.ChainEpoch, maddr address.Address, pv storiface.Verifier) (*api.MiningBaseInfo, error) {
+	ts, err := sm.ChainStore().LoadTipSet(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load tipset for mining base: %w", err)
 	}
 
-	prev, err := sm.ChainStore().GetLatestBeaconEntry(ts)
+	prev, err := sm.ChainStore().GetLatestBeaconEntry(ctx, ts)
 	if err != nil {
 		if os.Getenv("LOTUS_IGNORE_DRAND") != "_yes_" {
 			return nil, xerrors.Errorf("failed to get latest beacon entry: %w", err)
@@ -314,7 +316,7 @@ func MinerGetBaseInfo(ctx context.Context, sm *StateManager, bcs beacon.Schedule
 		prev = &types.BeaconEntry{}
 	}
 
-	entries, err := beacon.BeaconEntriesForBlock(ctx, bcs, round, ts.Height(), *prev)
+	entries, err := beacon.BeaconEntriesForBlock(ctx, bcs, sm.GetNetworkVersion(ctx, round), round, ts.Height(), *prev)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +359,7 @@ func MinerGetBaseInfo(ctx context.Context, sm *StateManager, bcs beacon.Schedule
 		return nil, xerrors.Errorf("failed to get randomness for winning post: %w", err)
 	}
 
-	nv := sm.GetNtwkVersion(ctx, ts.Height())
+	nv := sm.GetNetworkVersion(ctx, ts.Height())
 
 	sectors, err := GetSectorsForWinningPoSt(ctx, nv, pv, sm, lbst, maddr, prand)
 	if err != nil {
@@ -419,7 +421,7 @@ func MinerEligibleToMine(ctx context.Context, sm *StateManager, addr address.Add
 	hmp, err := minerHasMinPower(ctx, sm, addr, lookbackTs)
 
 	// TODO: We're blurring the lines between a "runtime network version" and a "Lotus upgrade epoch", is that unavoidable?
-	if sm.GetNtwkVersion(ctx, baseTs.Height()) <= network.Version3 {
+	if sm.GetNetworkVersion(ctx, baseTs.Height()) <= network.Version3 {
 		return hmp, err
 	}
 
@@ -509,6 +511,24 @@ func (sm *StateManager) GetMarketState(ctx context.Context, ts *types.TipSet) (m
 	}
 
 	actState, err := market.Load(sm.cs.ActorStore(ctx), act)
+	if err != nil {
+		return nil, err
+	}
+	return actState, nil
+}
+
+func (sm *StateManager) GetVerifregState(ctx context.Context, ts *types.TipSet) (verifreg.State, error) {
+	st, err := sm.ParentState(ts)
+	if err != nil {
+		return nil, err
+	}
+
+	act, err := st.GetActor(verifreg.Address)
+	if err != nil {
+		return nil, err
+	}
+
+	actState, err := verifreg.Load(sm.cs.ActorStore(ctx), act)
 	if err != nil {
 		return nil, err
 	}

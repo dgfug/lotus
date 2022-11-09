@@ -4,24 +4,23 @@ import (
 	"context"
 	"math"
 
-	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"go.uber.org/zap"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	actorstypes "github.com/filecoin-project/go-state-types/actors"
 	"github.com/filecoin-project/go-state-types/network"
 
 	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/account"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	lrand "github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
-
 	"github.com/filecoin-project/lotus/chain/vm"
 )
 
@@ -32,11 +31,12 @@ const (
 	// has.
 	// 5 per tipset, but we effectively get 4 blocks worth of messages.
 	expectedBlocks = 4
-	// TODO: This will produce invalid blocks but it will accurately model the amount of gas
-	// we're willing to use per-tipset.
-	// A more correct approach would be to produce 5 blocks. We can do that later.
-	targetGas = build.BlockGasTarget * expectedBlocks
 )
+
+// TODO: This will produce invalid blocks but it will accurately model the amount of gas
+// we're willing to use per-tipset.
+// A more correct approach would be to produce 5 blocks. We can do that later.
+var targetGas = build.BlockGasTarget * expectedBlocks
 
 type BlockBuilder struct {
 	ctx    context.Context
@@ -44,7 +44,7 @@ type BlockBuilder struct {
 
 	parentTs *types.TipSet
 	parentSt *state.StateTree
-	vm       *vm.VM
+	vm       *vm.LegacyVM
 	sm       *stmgr.StateManager
 
 	gasTotal int64
@@ -73,13 +73,13 @@ func NewBlockBuilder(ctx context.Context, logger *zap.SugaredLogger, sm *stmgr.S
 		parentSt: parentSt,
 	}
 
-	// Then we construct a VM to execute messages for gas estimation.
+	// Then we construct a LegacyVM to execute messages for gas estimation.
 	//
-	// Most parts of this VM are "real" except:
+	// Most parts of this LegacyVM are "real" except:
 	// 1. We don't charge a fee.
 	// 2. The runtime has "fake" proof logic.
 	// 3. We don't actually save any of the results.
-	r := lrand.NewStateRand(sm.ChainStore(), parentTs.Cids(), sm.Beacon())
+	r := lrand.NewStateRand(sm.ChainStore(), parentTs.Cids(), sm.Beacon(), sm.GetNetworkVersion)
 	vmopt := &vm.VMOpts{
 		StateBase:      parentState,
 		Epoch:          parentTs.Height() + 1,
@@ -88,11 +88,11 @@ func NewBlockBuilder(ctx context.Context, logger *zap.SugaredLogger, sm *stmgr.S
 		Actors:         filcns.NewActorRegistry(),
 		Syscalls:       sm.VMSys(),
 		CircSupplyCalc: sm.GetVMCirculatingSupply,
-		NtwkVersion:    sm.GetNtwkVersion,
+		NetworkVersion: sm.GetNetworkVersion(ctx, parentTs.Height()+1),
 		BaseFee:        abi.NewTokenAmount(0),
 		LookbackState:  stmgr.LookbackStateGetterForTipset(sm, parentTs),
 	}
-	bb.vm, err = vm.NewVM(bb.ctx, vmopt)
+	bb.vm, err = vm.NewLegacyVM(bb.ctx, vmopt)
 	if err != nil {
 		return nil, err
 	}
@@ -190,12 +190,12 @@ func (bb *BlockBuilder) PushMessage(msg *types.Message) (*types.MessageReceipt, 
 	return &ret.MessageReceipt, nil
 }
 
-// ActorStore returns the VM's current (pending) blockstore.
+// ActorStore returns the LegacyVM's current (pending) blockstore.
 func (bb *BlockBuilder) ActorStore() adt.Store {
 	return bb.vm.ActorStore(bb.ctx)
 }
 
-// StateTree returns the VM's current (pending) state-tree. This includes any changes made by
+// StateTree returns the LegacyVM's current (pending) state-tree. This includes any changes made by
 // successfully pushed messages.
 //
 // You probably want ParentStateTree
@@ -265,7 +265,7 @@ func (bb *BlockBuilder) Height() abi.ChainEpoch {
 
 // NetworkVersion returns the network version for the target block.
 func (bb *BlockBuilder) NetworkVersion() network.Version {
-	return bb.sm.GetNtwkVersion(bb.ctx, bb.Height())
+	return bb.sm.GetNetworkVersion(bb.ctx, bb.Height())
 }
 
 // StateManager returns the stmgr.StateManager.
@@ -274,8 +274,8 @@ func (bb *BlockBuilder) StateManager() *stmgr.StateManager {
 }
 
 // ActorsVersion returns the actors version for the target block.
-func (bb *BlockBuilder) ActorsVersion() (actors.Version, error) {
-	return actors.VersionForNetwork(bb.NetworkVersion())
+func (bb *BlockBuilder) ActorsVersion() (actorstypes.Version, error) {
+	return actorstypes.VersionForNetwork(bb.NetworkVersion())
 }
 
 func (bb *BlockBuilder) L() *zap.SugaredLogger {

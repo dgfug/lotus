@@ -1,3 +1,4 @@
+// stm: #unit
 package events
 
 import (
@@ -6,11 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"gotest.tools/assert"
-
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
+	"gotest.tools/assert"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -87,7 +87,7 @@ func (fcs *fakeCS) ChainGetPath(ctx context.Context, from, to types.TipSetKey) (
 	}
 
 	// copied from the chainstore
-	revert, apply, err := store.ReorgOps(func(tsk types.TipSetKey) (*types.TipSet, error) {
+	revert, apply, err := store.ReorgOps(ctx, func(ctx context.Context, tsk types.TipSetKey) (*types.TipSet, error) {
 		return fcs.ChainGetTipSet(ctx, tsk)
 	}, fromTs, toTs)
 	if err != nil {
@@ -358,6 +358,7 @@ func (fcs *fakeCS) advance(rev, app, drop int, msgs map[int]cid.Cid, nulls ...in
 var _ EventAPI = &fakeCS{}
 
 func TestAt(t *testing.T) {
+	//stm: @EVENTS_HEIGHT_CHAIN_AT_001, @EVENTS_HEIGHT_REVERT_001
 	fcs := newFakeCS(t)
 	events, err := NewEvents(context.Background(), fcs)
 	require.NoError(t, err)
@@ -418,6 +419,7 @@ func TestAt(t *testing.T) {
 }
 
 func TestAtNullTrigger(t *testing.T) {
+	//stm: @EVENTS_HEIGHT_CHAIN_AT_001
 	fcs := newFakeCS(t)
 	events, err := NewEvents(context.Background(), fcs)
 	require.NoError(t, err)
@@ -447,6 +449,7 @@ func TestAtNullTrigger(t *testing.T) {
 }
 
 func TestAtNullConf(t *testing.T) {
+	//stm: @EVENTS_HEIGHT_CHAIN_AT_001, @EVENTS_HEIGHT_REVERT_001
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -485,6 +488,7 @@ func TestAtNullConf(t *testing.T) {
 }
 
 func TestAtStart(t *testing.T) {
+	//stm: @EVENTS_HEIGHT_CHAIN_AT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -515,6 +519,7 @@ func TestAtStart(t *testing.T) {
 }
 
 func TestAtStartConfidence(t *testing.T) {
+	//stm: @EVENTS_HEIGHT_CHAIN_AT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -541,6 +546,7 @@ func TestAtStartConfidence(t *testing.T) {
 }
 
 func TestAtChained(t *testing.T) {
+	//stm: @EVENTS_HEIGHT_CHAIN_AT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -571,6 +577,7 @@ func TestAtChained(t *testing.T) {
 }
 
 func TestAtChainedConfidence(t *testing.T) {
+	//stm: @EVENTS_HEIGHT_CHAIN_AT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -601,6 +608,7 @@ func TestAtChainedConfidence(t *testing.T) {
 }
 
 func TestAtChainedConfidenceNull(t *testing.T) {
+	//stm: @EVENTS_HEIGHT_CHAIN_AT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -632,6 +640,7 @@ func matchAddrMethod(to address.Address, m abi.MethodNum) func(msg *types.Messag
 }
 
 func TestCalled(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -837,6 +846,7 @@ func TestCalled(t *testing.T) {
 }
 
 func TestCalledTimeout(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -897,6 +907,7 @@ func TestCalledTimeout(t *testing.T) {
 }
 
 func TestCalledOrder(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -953,6 +964,7 @@ func TestCalledOrder(t *testing.T) {
 }
 
 func TestCalledNull(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -1011,6 +1023,7 @@ func TestCalledNull(t *testing.T) {
 }
 
 func TestRemoveTriggersOnMessage(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -1094,6 +1107,7 @@ type testStateChange struct {
 }
 
 func TestStateChanged(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -1179,6 +1193,7 @@ func TestStateChanged(t *testing.T) {
 }
 
 func TestStateChangedRevert(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -1255,6 +1270,7 @@ func TestStateChangedRevert(t *testing.T) {
 }
 
 func TestStateChangedTimeout(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	timeoutHeight := abi.ChainEpoch(20)
 	confidence := 3
 
@@ -1332,6 +1348,7 @@ func TestStateChangedTimeout(t *testing.T) {
 }
 
 func TestCalledMultiplePerEpoch(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	fcs := newFakeCS(t)
 
 	events, err := NewEvents(context.Background(), fcs)
@@ -1384,6 +1401,7 @@ func TestCalledMultiplePerEpoch(t *testing.T) {
 }
 
 func TestCachedSameBlock(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	fcs := newFakeCS(t)
 
 	_, err := NewEvents(context.Background(), fcs)
@@ -1418,6 +1436,7 @@ func (t *testObserver) Revert(_ context.Context, from, to *types.TipSet) error {
 }
 
 func TestReconnect(t *testing.T) {
+	//stm: @EVENTS_EVENTS_CALLED_001, @EVENTS_HEIGHT_REVERT_001
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1448,4 +1467,36 @@ func TestReconnect(t *testing.T) {
 	// drop with nulls
 	fcs.advance(0, 5, 2, nil, 0, 1, 3)
 	require.True(t, fcs.callNumber["ChainGetPath"] == 4)
+}
+
+func TestUnregister(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fcs := newFakeCS(t)
+
+	events, err := NewEvents(ctx, fcs)
+	require.NoError(t, err)
+
+	tsObs := &testObserver{t: t}
+	events.Observe(tsObs)
+
+	// observer receives heads as the chain advances
+	fcs.advance(0, 1, 0, nil)
+	headBeforeDeregister := events.lastTs
+	require.Equal(t, tsObs.head, headBeforeDeregister)
+
+	// observer unregistered successfully
+	found := events.Unregister(tsObs)
+	require.True(t, found)
+
+	// observer stops receiving heads as the chain advances
+	fcs.advance(0, 1, 0, nil)
+	require.Equal(t, tsObs.head, headBeforeDeregister)
+	require.NotEqual(t, tsObs.head, events.lastTs)
+
+	// unregistering an invalid observer returns false
+	dneObs := &testObserver{t: t}
+	found = events.Unregister(dneObs)
+	require.False(t, found)
 }

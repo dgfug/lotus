@@ -29,6 +29,7 @@
   * [ChainHasObj](#ChainHasObj)
   * [ChainHead](#ChainHead)
   * [ChainNotify](#ChainNotify)
+  * [ChainPutObj](#ChainPutObj)
   * [ChainReadObj](#ChainReadObj)
   * [ChainSetHead](#ChainSetHead)
   * [ChainStatObj](#ChainStatObj)
@@ -128,9 +129,16 @@
   * [NetConnectedness](#NetConnectedness)
   * [NetDisconnect](#NetDisconnect)
   * [NetFindPeer](#NetFindPeer)
+  * [NetLimit](#NetLimit)
   * [NetPeerInfo](#NetPeerInfo)
   * [NetPeers](#NetPeers)
+  * [NetPing](#NetPing)
+  * [NetProtectAdd](#NetProtectAdd)
+  * [NetProtectList](#NetProtectList)
+  * [NetProtectRemove](#NetProtectRemove)
   * [NetPubsubScores](#NetPubsubScores)
+  * [NetSetLimit](#NetSetLimit)
+  * [NetStat](#NetStat)
 * [Paych](#Paych)
   * [PaychAllocateLane](#PaychAllocateLane)
   * [PaychAvailableFunds](#PaychAvailableFunds)
@@ -148,8 +156,12 @@
   * [PaychVoucherCreate](#PaychVoucherCreate)
   * [PaychVoucherList](#PaychVoucherList)
   * [PaychVoucherSubmit](#PaychVoucherSubmit)
+* [Start](#Start)
+  * [StartTime](#StartTime)
 * [State](#State)
   * [StateAccountKey](#StateAccountKey)
+  * [StateActorCodeCIDs](#StateActorCodeCIDs)
+  * [StateActorManifestCID](#StateActorManifestCID)
   * [StateAllMinerFaults](#StateAllMinerFaults)
   * [StateCall](#StateCall)
   * [StateChangedActors](#StateChangedActors)
@@ -158,6 +170,12 @@
   * [StateDealProviderCollateralBounds](#StateDealProviderCollateralBounds)
   * [StateDecodeParams](#StateDecodeParams)
   * [StateGetActor](#StateGetActor)
+  * [StateGetAllocation](#StateGetAllocation)
+  * [StateGetAllocationForPendingDeal](#StateGetAllocationForPendingDeal)
+  * [StateGetAllocations](#StateGetAllocations)
+  * [StateGetClaim](#StateGetClaim)
+  * [StateGetClaims](#StateGetClaims)
+  * [StateGetNetworkParams](#StateGetNetworkParams)
   * [StateGetRandomnessFromBeacon](#StateGetRandomnessFromBeacon)
   * [StateGetRandomnessFromTickets](#StateGetRandomnessFromTickets)
   * [StateGetReceipt](#StateGetReceipt)
@@ -283,7 +301,7 @@ Response:
 ```json
 {
   "Version": "string value",
-  "APIVersion": 131328,
+  "APIVersion": 131840,
   "BlockDelay": 42
 }
 ```
@@ -299,7 +317,9 @@ Perms: admin
 Inputs:
 ```json
 [
-  null
+  [
+    "write"
+  ]
 ]
 ```
 
@@ -317,7 +337,12 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  "write"
+]
+```
 
 ## Beacon
 The Beacon method group contains methods for interacting with the random beacon (DRAND)
@@ -422,9 +447,23 @@ Response:
     "WinCount": 9,
     "VRFProof": "Ynl0ZSBhcnJheQ=="
   },
-  "BeaconEntries": null,
-  "WinPoStProof": null,
-  "Parents": null,
+  "BeaconEntries": [
+    {
+      "Round": 42,
+      "Data": "Ynl0ZSBhcnJheQ=="
+    }
+  ],
+  "WinPoStProof": [
+    {
+      "PoStProof": 8,
+      "ProofBytes": "Ynl0ZSBhcnJheQ=="
+    }
+  ],
+  "Parents": [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    }
+  ],
   "ParentWeight": "0",
   "Height": 10101,
   "ParentStateRoot": {
@@ -479,9 +518,54 @@ Inputs:
 Response:
 ```json
 {
-  "BlsMessages": null,
-  "SecpkMessages": null,
-  "Cids": null
+  "BlsMessages": [
+    {
+      "Version": 42,
+      "To": "f01234",
+      "From": "f01234",
+      "Nonce": 42,
+      "Value": "0",
+      "GasLimit": 9,
+      "GasFeeCap": "0",
+      "GasPremium": "0",
+      "Method": 1,
+      "Params": "Ynl0ZSBhcnJheQ==",
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    }
+  ],
+  "SecpkMessages": [
+    {
+      "Message": {
+        "Version": 42,
+        "To": "f01234",
+        "From": "f01234",
+        "Nonce": 42,
+        "Value": "0",
+        "GasLimit": 9,
+        "GasFeeCap": "0",
+        "GasPremium": "0",
+        "Method": 1,
+        "Params": "Ynl0ZSBhcnJheQ==",
+        "CID": {
+          "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+        }
+      },
+      "Signature": {
+        "Type": 2,
+        "Data": "Ynl0ZSBhcnJheQ=="
+      },
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    }
+  ],
+  "Cids": [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    }
+  ]
 }
 ```
 
@@ -557,7 +641,31 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Cid": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "Message": {
+      "Version": 42,
+      "To": "f01234",
+      "From": "f01234",
+      "Nonce": 42,
+      "Value": "0",
+      "GasLimit": 9,
+      "GasFeeCap": "0",
+      "GasPremium": "0",
+      "Method": 1,
+      "Params": "Ynl0ZSBhcnJheQ==",
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    }
+  }
+]
+```
 
 ### ChainGetNode
 
@@ -597,7 +705,31 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Cid": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "Message": {
+      "Version": 42,
+      "To": "f01234",
+      "From": "f01234",
+      "Nonce": 42,
+      "Value": "0",
+      "GasLimit": 9,
+      "GasFeeCap": "0",
+      "GasPremium": "0",
+      "Method": 1,
+      "Params": "Ynl0ZSBhcnJheQ==",
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    }
+  }
+]
+```
 
 ### ChainGetParentReceipts
 ChainGetParentReceipts returns receipts for messages in parent tipset of
@@ -616,7 +748,16 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "ExitCode": 0,
+    "Return": "Ynl0ZSBhcnJheQ==",
+    "GasUsed": 9
+  }
+]
+```
 
 ### ChainGetPath
 ChainGetPath returns a set of revert/apply operations needed to get from
@@ -658,7 +799,19 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Type": "string value",
+    "Val": {
+      "Cids": null,
+      "Blocks": null,
+      "Height": 0
+    }
+  }
+]
+```
 
 ### ChainGetRandomnessFromBeacon
 ChainGetRandomnessFromBeacon is used to sample the beacon for randomness.
@@ -683,7 +836,7 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response: `"Bw=="`
 
 ### ChainGetRandomnessFromTickets
 ChainGetRandomnessFromTickets is used to sample the chain for randomness.
@@ -708,7 +861,7 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response: `"Bw=="`
 
 ### ChainGetTipSet
 ChainGetTipSet returns the tipset specified by the given TipSetKey.
@@ -814,7 +967,34 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Type": "string value",
+    "Val": {
+      "Cids": null,
+      "Blocks": null,
+      "Height": 0
+    }
+  }
+]
+```
+
+### ChainPutObj
+ChainPutObj puts and object into the blockstore
+
+
+Perms: 
+
+Inputs:
+```json
+[
+  {}
+]
+```
+
+Response: `{}`
 
 ### ChainReadObj
 ChainReadObj reads ipld nodes referenced by the specified CID from chain
@@ -988,7 +1168,20 @@ Response:
   "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
   "Transferred": 42,
   "Stages": {
-    "Stages": null
+    "Stages": [
+      {
+        "Name": "string value",
+        "Description": "string value",
+        "CreatedTime": "0001-01-01T00:00:00Z",
+        "UpdatedTime": "0001-01-01T00:00:00Z",
+        "Logs": [
+          {
+            "Log": "string value",
+            "UpdatedTime": "0001-01-01T00:00:00Z"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
@@ -1058,7 +1251,30 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Err": "string value",
+    "Root": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "Piece": null,
+    "Size": 42,
+    "MinPrice": "0",
+    "UnsealPrice": "0",
+    "PricePerByte": "0",
+    "PaymentInterval": 42,
+    "PaymentIntervalIncrease": 42,
+    "Miner": "f01234",
+    "MinerPeer": {
+      "Address": "f01234",
+      "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "PieceCID": null
+    }
+  }
+]
+```
 
 ### ClientGenCar
 ClientGenCar generates a CAR file for the specified file.
@@ -1103,7 +1319,21 @@ Response:
   "State": 42,
   "Message": "string value",
   "DealStages": {
-    "Stages": null
+    "Stages": [
+      {
+        "Name": "string value",
+        "Description": "string value",
+        "ExpectedDuration": "string value",
+        "CreatedTime": "0001-01-01T00:00:00Z",
+        "UpdatedTime": "0001-01-01T00:00:00Z",
+        "Logs": [
+          {
+            "Log": "string value",
+            "UpdatedTime": "0001-01-01T00:00:00Z"
+          }
+        ]
+      }
+    ]
   },
   "Provider": "f01234",
   "DataRef": {
@@ -1142,7 +1372,20 @@ Response:
     "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
     "Transferred": 42,
     "Stages": {
-      "Stages": null
+      "Stages": [
+        {
+          "Name": "string value",
+          "Description": "string value",
+          "CreatedTime": "0001-01-01T00:00:00Z",
+          "UpdatedTime": "0001-01-01T00:00:00Z",
+          "Logs": [
+            {
+              "Log": "string value",
+              "UpdatedTime": "0001-01-01T00:00:00Z"
+            }
+          ]
+        }
+      ]
     }
   }
 }
@@ -1180,7 +1423,21 @@ Response:
   "State": 42,
   "Message": "string value",
   "DealStages": {
-    "Stages": null
+    "Stages": [
+      {
+        "Name": "string value",
+        "Description": "string value",
+        "ExpectedDuration": "string value",
+        "CreatedTime": "0001-01-01T00:00:00Z",
+        "UpdatedTime": "0001-01-01T00:00:00Z",
+        "Logs": [
+          {
+            "Log": "string value",
+            "UpdatedTime": "0001-01-01T00:00:00Z"
+          }
+        ]
+      }
+    ]
   },
   "Provider": "f01234",
   "DataRef": {
@@ -1219,7 +1476,20 @@ Response:
     "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
     "Transferred": 42,
     "Stages": {
-      "Stages": null
+      "Stages": [
+        {
+          "Name": "string value",
+          "Description": "string value",
+          "CreatedTime": "0001-01-01T00:00:00Z",
+          "UpdatedTime": "0001-01-01T00:00:00Z",
+          "Logs": [
+            {
+              "Log": "string value",
+              "UpdatedTime": "0001-01-01T00:00:00Z"
+            }
+          ]
+        }
+      ]
     }
   }
 }
@@ -1267,9 +1537,23 @@ Response:
     "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
     "Transferred": 42,
     "Stages": {
-      "Stages": null
+      "Stages": [
+        {
+          "Name": "string value",
+          "Description": "string value",
+          "CreatedTime": "0001-01-01T00:00:00Z",
+          "UpdatedTime": "0001-01-01T00:00:00Z",
+          "Logs": [
+            {
+              "Log": "string value",
+              "UpdatedTime": "0001-01-01T00:00:00Z"
+            }
+          ]
+        }
+      ]
     }
-  }
+  },
+  "Event": 5
 }
 ```
 
@@ -1324,7 +1608,40 @@ Perms: write
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "TransferID": 3,
+    "Status": 1,
+    "BaseCID": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "IsInitiator": true,
+    "IsSender": true,
+    "Voucher": "string value",
+    "Message": "string value",
+    "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+    "Transferred": 42,
+    "Stages": {
+      "Stages": [
+        {
+          "Name": "string value",
+          "Description": "string value",
+          "CreatedTime": "0001-01-01T00:00:00Z",
+          "UpdatedTime": "0001-01-01T00:00:00Z",
+          "Logs": [
+            {
+              "Log": "string value",
+              "UpdatedTime": "0001-01-01T00:00:00Z"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
+```
 
 ### ClientListDeals
 ClientListDeals returns information about the deals made by the local client.
@@ -1334,7 +1651,88 @@ Perms: write
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "ProposalCid": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "State": 42,
+    "Message": "string value",
+    "DealStages": {
+      "Stages": [
+        {
+          "Name": "string value",
+          "Description": "string value",
+          "ExpectedDuration": "string value",
+          "CreatedTime": "0001-01-01T00:00:00Z",
+          "UpdatedTime": "0001-01-01T00:00:00Z",
+          "Logs": [
+            {
+              "Log": "string value",
+              "UpdatedTime": "0001-01-01T00:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    "Provider": "f01234",
+    "DataRef": {
+      "TransferType": "string value",
+      "Root": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      "PieceCid": null,
+      "PieceSize": 1024,
+      "RawBlockSize": 42
+    },
+    "PieceCID": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "Size": 42,
+    "PricePerEpoch": "0",
+    "Duration": 42,
+    "DealID": 5432,
+    "CreationTime": "0001-01-01T00:00:00Z",
+    "Verified": true,
+    "TransferChannelID": {
+      "Initiator": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "Responder": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "ID": 3
+    },
+    "DataTransfer": {
+      "TransferID": 3,
+      "Status": 1,
+      "BaseCID": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      "IsInitiator": true,
+      "IsSender": true,
+      "Voucher": "string value",
+      "Message": "string value",
+      "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "Transferred": 42,
+      "Stages": {
+        "Stages": [
+          {
+            "Name": "string value",
+            "Description": "string value",
+            "CreatedTime": "0001-01-01T00:00:00Z",
+            "UpdatedTime": "0001-01-01T00:00:00Z",
+            "Logs": [
+              {
+                "Log": "string value",
+                "UpdatedTime": "0001-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+]
+```
 
 ### ClientListImports
 ClientListImports lists imported files and their root CIDs
@@ -1344,7 +1742,19 @@ Perms: write
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Key": 50,
+    "Err": "string value",
+    "Root": null,
+    "Source": "string value",
+    "FilePath": "string value",
+    "CARPath": "string value"
+  }
+]
+```
 
 ### ClientListRetrievals
 ClientQueryAsk returns a signed StorageAsk from the specified miner.
@@ -1355,7 +1765,61 @@ Perms: write
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "PayloadCID": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "ID": 5,
+    "PieceCID": null,
+    "PricePerByte": "0",
+    "UnsealPrice": "0",
+    "Status": 0,
+    "Message": "string value",
+    "Provider": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+    "BytesReceived": 42,
+    "BytesPaidFor": 42,
+    "TotalPaid": "0",
+    "TransferChannelID": {
+      "Initiator": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "Responder": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "ID": 3
+    },
+    "DataTransfer": {
+      "TransferID": 3,
+      "Status": 1,
+      "BaseCID": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      "IsInitiator": true,
+      "IsSender": true,
+      "Voucher": "string value",
+      "Message": "string value",
+      "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "Transferred": 42,
+      "Stages": {
+        "Stages": [
+          {
+            "Name": "string value",
+            "Description": "string value",
+            "CreatedTime": "0001-01-01T00:00:00Z",
+            "UpdatedTime": "0001-01-01T00:00:00Z",
+            "Logs": [
+              {
+                "Log": "string value",
+                "UpdatedTime": "0001-01-01T00:00:00Z"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "Event": 5
+  }
+]
+```
 
 ### ClientMinerQueryOffer
 ClientMinerQueryOffer returns a QueryOffer for the specific miner and file.
@@ -1385,6 +1849,7 @@ Response:
   "Size": 42,
   "MinPrice": "0",
   "UnsealPrice": "0",
+  "PricePerByte": "0",
   "PaymentInterval": 42,
   "PaymentIntervalIncrease": 42,
   "Miner": "f01234",
@@ -1774,7 +2239,8 @@ Inputs:
     }
   },
   {
-    "MaxFee": "0"
+    "MaxFee": "0",
+    "MsgUuid": "07070707-0707-0707-0707-070707070707"
   },
   [
     {
@@ -1828,7 +2294,28 @@ Perms: admin
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Type": {
+      "System": "string value",
+      "Subsystem": "string value"
+    },
+    "Active": true,
+    "LastActive": {
+      "Type": "string value",
+      "Message": "json raw message",
+      "Time": "0001-01-01T00:00:00Z"
+    },
+    "LastResolved": {
+      "Type": "string value",
+      "Message": "json raw message",
+      "Time": "0001-01-01T00:00:00Z"
+    }
+  }
+]
+```
 
 ### LogList
 
@@ -1837,7 +2324,12 @@ Perms: write
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  "string value"
+]
+```
 
 ### LogSetLevel
 
@@ -1982,11 +2474,46 @@ Inputs:
       "WinCount": 9,
       "VRFProof": "Ynl0ZSBhcnJheQ=="
     },
-    "BeaconValues": null,
-    "Messages": null,
+    "BeaconValues": [
+      {
+        "Round": 42,
+        "Data": "Ynl0ZSBhcnJheQ=="
+      }
+    ],
+    "Messages": [
+      {
+        "Message": {
+          "Version": 42,
+          "To": "f01234",
+          "From": "f01234",
+          "Nonce": 42,
+          "Value": "0",
+          "GasLimit": 9,
+          "GasFeeCap": "0",
+          "GasPremium": "0",
+          "Method": 1,
+          "Params": "Ynl0ZSBhcnJheQ==",
+          "CID": {
+            "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+          }
+        },
+        "Signature": {
+          "Type": 2,
+          "Data": "Ynl0ZSBhcnJheQ=="
+        },
+        "CID": {
+          "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+        }
+      }
+    ],
     "Epoch": 10101,
     "Timestamp": 42,
-    "WinningPoStProof": null
+    "WinningPoStProof": [
+      {
+        "PoStProof": 8,
+        "ProofBytes": "Ynl0ZSBhcnJheQ=="
+      }
+    ]
   }
 ]
 ```
@@ -2003,9 +2530,23 @@ Response:
       "WinCount": 9,
       "VRFProof": "Ynl0ZSBhcnJheQ=="
     },
-    "BeaconEntries": null,
-    "WinPoStProof": null,
-    "Parents": null,
+    "BeaconEntries": [
+      {
+        "Round": 42,
+        "Data": "Ynl0ZSBhcnJheQ=="
+      }
+    ],
+    "WinPoStProof": [
+      {
+        "PoStProof": 8,
+        "ProofBytes": "Ynl0ZSBhcnJheQ=="
+      }
+    ],
+    "Parents": [
+      {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      }
+    ],
     "ParentWeight": "0",
     "Height": 10101,
     "ParentStateRoot": {
@@ -2029,8 +2570,16 @@ Response:
     "ForkSignaling": 42,
     "ParentBaseFee": "0"
   },
-  "BlsMessages": null,
-  "SecpkMessages": null
+  "BlsMessages": [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    }
+  ],
+  "SecpkMessages": [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    }
+  ]
 }
 ```
 
@@ -2060,14 +2609,28 @@ Response:
 {
   "MinerPower": "0",
   "NetworkPower": "0",
-  "Sectors": null,
+  "Sectors": [
+    {
+      "SealProof": 8,
+      "SectorNumber": 9,
+      "SectorKey": null,
+      "SealedCID": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      }
+    }
+  ],
   "WorkerKey": "f01234",
   "SectorSize": 34359738368,
   "PrevBeaconEntry": {
     "Round": 42,
     "Data": "Ynl0ZSBhcnJheQ=="
   },
-  "BeaconEntries": null,
+  "BeaconEntries": [
+    {
+      "Round": 42,
+      "Data": "Ynl0ZSBhcnJheQ=="
+    }
+  ],
   "EligibleForMining": true
 }
 ```
@@ -2086,11 +2649,43 @@ Perms: write
 Inputs:
 ```json
 [
-  null
+  [
+    {
+      "Message": {
+        "Version": 42,
+        "To": "f01234",
+        "From": "f01234",
+        "Nonce": 42,
+        "Value": "0",
+        "GasLimit": 9,
+        "GasFeeCap": "0",
+        "GasPremium": "0",
+        "Method": 1,
+        "Params": "Ynl0ZSBhcnJheQ==",
+        "CID": {
+          "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+        }
+      },
+      "Signature": {
+        "Type": 2,
+        "Data": "Ynl0ZSBhcnJheQ=="
+      },
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    }
+  ]
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
+]
+```
 
 ### MpoolBatchPushMessage
 MpoolBatchPushMessage batch pushes a unsigned message to mempool.
@@ -2101,14 +2696,59 @@ Perms: sign
 Inputs:
 ```json
 [
-  null,
+  [
+    {
+      "Version": 42,
+      "To": "f01234",
+      "From": "f01234",
+      "Nonce": 42,
+      "Value": "0",
+      "GasLimit": 9,
+      "GasFeeCap": "0",
+      "GasPremium": "0",
+      "Method": 1,
+      "Params": "Ynl0ZSBhcnJheQ==",
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    }
+  ],
   {
-    "MaxFee": "0"
+    "MaxFee": "0",
+    "MsgUuid": "07070707-0707-0707-0707-070707070707"
   }
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Message": {
+      "Version": 42,
+      "To": "f01234",
+      "From": "f01234",
+      "Nonce": 42,
+      "Value": "0",
+      "GasLimit": 9,
+      "GasFeeCap": "0",
+      "GasPremium": "0",
+      "Method": 1,
+      "Params": "Ynl0ZSBhcnJheQ==",
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    },
+    "Signature": {
+      "Type": 2,
+      "Data": "Ynl0ZSBhcnJheQ=="
+    },
+    "CID": {
+      "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+    }
+  }
+]
+```
 
 ### MpoolBatchPushUntrusted
 MpoolBatchPushUntrusted batch pushes a signed message to mempool from untrusted sources.
@@ -2119,11 +2759,43 @@ Perms: write
 Inputs:
 ```json
 [
-  null
+  [
+    {
+      "Message": {
+        "Version": 42,
+        "To": "f01234",
+        "From": "f01234",
+        "Nonce": 42,
+        "Value": "0",
+        "GasLimit": 9,
+        "GasFeeCap": "0",
+        "GasPremium": "0",
+        "Method": 1,
+        "Params": "Ynl0ZSBhcnJheQ==",
+        "CID": {
+          "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+        }
+      },
+      "Signature": {
+        "Type": 2,
+        "Data": "Ynl0ZSBhcnJheQ=="
+      },
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    }
+  ]
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
+]
+```
 
 ### MpoolClear
 MpoolClear clears pending messages from the mpool
@@ -2151,7 +2823,9 @@ Inputs: `null`
 Response:
 ```json
 {
-  "PriorityAddrs": null,
+  "PriorityAddrs": [
+    "f01234"
+  ],
   "SizeLimitHigh": 123,
   "SizeLimitLow": 123,
   "ReplaceByFeeRatio": 12.3,
@@ -2196,7 +2870,35 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Message": {
+      "Version": 42,
+      "To": "f01234",
+      "From": "f01234",
+      "Nonce": 42,
+      "Value": "0",
+      "GasLimit": 9,
+      "GasFeeCap": "0",
+      "GasPremium": "0",
+      "Method": 1,
+      "Params": "Ynl0ZSBhcnJheQ==",
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    },
+    "Signature": {
+      "Type": 2,
+      "Data": "Ynl0ZSBhcnJheQ=="
+    },
+    "CID": {
+      "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+    }
+  }
+]
+```
 
 ### MpoolPush
 MpoolPush pushes a signed message to mempool.
@@ -2271,7 +2973,8 @@ Inputs:
     }
   },
   {
-    "MaxFee": "0"
+    "MaxFee": "0",
+    "MsgUuid": "07070707-0707-0707-0707-070707070707"
   }
 ]
 ```
@@ -2368,7 +3071,35 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Message": {
+      "Version": 42,
+      "To": "f01234",
+      "From": "f01234",
+      "Nonce": 42,
+      "Value": "0",
+      "GasLimit": 9,
+      "GasFeeCap": "0",
+      "GasPremium": "0",
+      "Method": 1,
+      "Params": "Ynl0ZSBhcnJheQ==",
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    },
+    "Signature": {
+      "Type": 2,
+      "Data": "Ynl0ZSBhcnJheQ=="
+    },
+    "CID": {
+      "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+    }
+  }
+]
+```
 
 ### MpoolSetConfig
 MpoolSetConfig sets the mpool config to (a copy of) the supplied config
@@ -2380,7 +3111,9 @@ Inputs:
 ```json
 [
   {
-    "PriorityAddrs": null,
+    "PriorityAddrs": [
+      "f01234"
+    ],
     "SizeLimitHigh": 123,
     "SizeLimitLow": 123,
     "ReplaceByFeeRatio": 12.3,
@@ -2608,7 +3341,9 @@ Inputs:
 ```json
 [
   42,
-  null,
+  [
+    "f01234"
+  ],
   10101,
   "0",
   "f01234",
@@ -2669,7 +3404,21 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "ID": 9,
+    "To": "f01234",
+    "Value": "0",
+    "Method": 1,
+    "Params": "Ynl0ZSBhcnJheQ==",
+    "Approved": [
+      "f01234"
+    ]
+  }
+]
+```
 
 ### MsigGetVested
 MsigGetVested returns the amount of FIL that vested in a multisig in a certain period.
@@ -2879,7 +3628,9 @@ Response:
 ```json
 {
   "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
-  "Addrs": []
+  "Addrs": [
+    "/ip4/52.36.61.156/tcp/1347/p2p/12D3KooWFETiESTf1v4PGUvtnxMAcEFMzLZbJGg4tjWfGEimYior"
+  ]
 }
 ```
 
@@ -2976,9 +3727,15 @@ Inputs:
 ```json
 [
   {
-    "Peers": null,
-    "IPAddrs": null,
-    "IPSubnets": null
+    "Peers": [
+      "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+    ],
+    "IPAddrs": [
+      "string value"
+    ],
+    "IPSubnets": [
+      "string value"
+    ]
   }
 ]
 ```
@@ -2995,9 +3752,15 @@ Inputs: `null`
 Response:
 ```json
 {
-  "Peers": null,
-  "IPAddrs": null,
-  "IPSubnets": null
+  "Peers": [
+    "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+  ],
+  "IPAddrs": [
+    "string value"
+  ],
+  "IPSubnets": [
+    "string value"
+  ]
 }
 ```
 
@@ -3010,9 +3773,15 @@ Inputs:
 ```json
 [
   {
-    "Peers": null,
-    "IPAddrs": null,
-    "IPSubnets": null
+    "Peers": [
+      "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+    ],
+    "IPAddrs": [
+      "string value"
+    ],
+    "IPSubnets": [
+      "string value"
+    ]
   }
 ]
 ```
@@ -3029,7 +3798,9 @@ Inputs:
 [
   {
     "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
-    "Addrs": []
+    "Addrs": [
+      "/ip4/52.36.61.156/tcp/1347/p2p/12D3KooWFETiESTf1v4PGUvtnxMAcEFMzLZbJGg4tjWfGEimYior"
+    ]
   }
 ]
 ```
@@ -3080,7 +3851,35 @@ Response:
 ```json
 {
   "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
-  "Addrs": []
+  "Addrs": [
+    "/ip4/52.36.61.156/tcp/1347/p2p/12D3KooWFETiESTf1v4PGUvtnxMAcEFMzLZbJGg4tjWfGEimYior"
+  ]
+}
+```
+
+### NetLimit
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "string value"
+]
+```
+
+Response:
+```json
+{
+  "Memory": 123,
+  "Streams": 3,
+  "StreamsInbound": 1,
+  "StreamsOutbound": 2,
+  "Conns": 4,
+  "ConnsInbound": 3,
+  "ConnsOutbound": 4,
+  "FD": 5
 }
 ```
 
@@ -3101,8 +3900,12 @@ Response:
 {
   "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
   "Agent": "string value",
-  "Addrs": null,
-  "Protocols": null,
+  "Addrs": [
+    "string value"
+  ],
+  "Protocols": [
+    "string value"
+  ],
   "ConnMgrMeta": {
     "FirstSeen": "0001-01-01T00:00:00Z",
     "Value": 123,
@@ -3123,7 +3926,77 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+    "Addrs": [
+      "/ip4/52.36.61.156/tcp/1347/p2p/12D3KooWFETiESTf1v4PGUvtnxMAcEFMzLZbJGg4tjWfGEimYior"
+    ]
+  }
+]
+```
+
+### NetPing
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+]
+```
+
+Response: `60000000000`
+
+### NetProtectAdd
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  [
+    "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+  ]
+]
+```
+
+Response: `{}`
+
+### NetProtectList
+
+
+Perms: read
+
+Inputs: `null`
+
+Response:
+```json
+[
+  "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+]
+```
+
+### NetProtectRemove
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  [
+    "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+  ]
+]
+```
+
+Response: `{}`
 
 ### NetPubsubScores
 
@@ -3132,7 +4005,116 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+    "Score": {
+      "Score": 12.3,
+      "Topics": {
+        "/blocks": {
+          "TimeInMesh": 60000000000,
+          "FirstMessageDeliveries": 122,
+          "MeshMessageDeliveries": 1234,
+          "InvalidMessageDeliveries": 3
+        }
+      },
+      "AppSpecificScore": 12.3,
+      "IPColocationFactor": 12.3,
+      "BehaviourPenalty": 12.3
+    }
+  }
+]
+```
+
+### NetSetLimit
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "string value",
+  {
+    "Memory": 123,
+    "Streams": 3,
+    "StreamsInbound": 1,
+    "StreamsOutbound": 2,
+    "Conns": 4,
+    "ConnsInbound": 3,
+    "ConnsOutbound": 4,
+    "FD": 5
+  }
+]
+```
+
+Response: `{}`
+
+### NetStat
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "string value"
+]
+```
+
+Response:
+```json
+{
+  "System": {
+    "NumStreamsInbound": 123,
+    "NumStreamsOutbound": 123,
+    "NumConnsInbound": 123,
+    "NumConnsOutbound": 123,
+    "NumFD": 123,
+    "Memory": 9
+  },
+  "Transient": {
+    "NumStreamsInbound": 123,
+    "NumStreamsOutbound": 123,
+    "NumConnsInbound": 123,
+    "NumConnsOutbound": 123,
+    "NumFD": 123,
+    "Memory": 9
+  },
+  "Services": {
+    "abc": {
+      "NumStreamsInbound": 1,
+      "NumStreamsOutbound": 2,
+      "NumConnsInbound": 3,
+      "NumConnsOutbound": 4,
+      "NumFD": 5,
+      "Memory": 123
+    }
+  },
+  "Protocols": {
+    "abc": {
+      "NumStreamsInbound": 1,
+      "NumStreamsOutbound": 2,
+      "NumConnsInbound": 3,
+      "NumConnsOutbound": 4,
+      "NumFD": 5,
+      "Memory": 123
+    }
+  },
+  "Peers": {
+    "abc": {
+      "NumStreamsInbound": 1,
+      "NumStreamsOutbound": 2,
+      "NumConnsInbound": 3,
+      "NumConnsOutbound": 4,
+      "NumFD": 5,
+      "Memory": 123
+    }
+  }
+}
+```
 
 ## Paych
 The Paych methods are for interacting with and managing payment channels
@@ -3172,6 +4154,8 @@ Response:
   "To": "f01234",
   "ConfirmedAmt": "0",
   "PendingAmt": "0",
+  "NonReservedAmt": "0",
+  "PendingAvailableAmt": "0",
   "PendingWaitSentinel": null,
   "QueuedAmt": "0",
   "VoucherReedeemedAmt": "0"
@@ -3199,6 +4183,8 @@ Response:
   "To": "f01234",
   "ConfirmedAmt": "0",
   "PendingAmt": "0",
+  "NonReservedAmt": "0",
+  "PendingAvailableAmt": "0",
   "PendingWaitSentinel": null,
   "QueuedAmt": "0",
   "VoucherReedeemedAmt": "0"
@@ -3271,7 +4257,12 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  "f01234"
+]
+```
 
 ### PaychNewPayment
 
@@ -3283,7 +4274,19 @@ Inputs:
 [
   "f01234",
   "f01234",
-  null
+  [
+    {
+      "Amount": "0",
+      "TimeLockMin": 10101,
+      "TimeLockMax": 10101,
+      "MinSettle": 10101,
+      "Extra": {
+        "Actor": "f01234",
+        "Method": 1,
+        "Data": "Ynl0ZSBhcnJheQ=="
+      }
+    }
+  ]
 ]
 ```
 
@@ -3294,7 +4297,33 @@ Response:
   "WaitSentinel": {
     "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
   },
-  "Vouchers": null
+  "Vouchers": [
+    {
+      "ChannelAddr": "f01234",
+      "TimeLockMin": 10101,
+      "TimeLockMax": 10101,
+      "SecretHash": "Ynl0ZSBhcnJheQ==",
+      "Extra": {
+        "Actor": "f01234",
+        "Method": 1,
+        "Data": "Ynl0ZSBhcnJheQ=="
+      },
+      "Lane": 42,
+      "Nonce": 42,
+      "Amount": "0",
+      "MinSettleHeight": 10101,
+      "Merges": [
+        {
+          "Lane": 42,
+          "Nonce": 42
+        }
+      ],
+      "Signature": {
+        "Type": 2,
+        "Data": "Ynl0ZSBhcnJheQ=="
+      }
+    }
+  ]
 }
 ```
 
@@ -3350,7 +4379,7 @@ Inputs:
     "ChannelAddr": "f01234",
     "TimeLockMin": 10101,
     "TimeLockMax": 10101,
-    "SecretPreimage": "Ynl0ZSBhcnJheQ==",
+    "SecretHash": "Ynl0ZSBhcnJheQ==",
     "Extra": {
       "Actor": "f01234",
       "Method": 1,
@@ -3360,7 +4389,12 @@ Inputs:
     "Nonce": 42,
     "Amount": "0",
     "MinSettleHeight": 10101,
-    "Merges": null,
+    "Merges": [
+      {
+        "Lane": 42,
+        "Nonce": 42
+      }
+    ],
     "Signature": {
       "Type": 2,
       "Data": "Ynl0ZSBhcnJheQ=="
@@ -3386,7 +4420,7 @@ Inputs:
     "ChannelAddr": "f01234",
     "TimeLockMin": 10101,
     "TimeLockMax": 10101,
-    "SecretPreimage": "Ynl0ZSBhcnJheQ==",
+    "SecretHash": "Ynl0ZSBhcnJheQ==",
     "Extra": {
       "Actor": "f01234",
       "Method": 1,
@@ -3396,7 +4430,12 @@ Inputs:
     "Nonce": 42,
     "Amount": "0",
     "MinSettleHeight": 10101,
-    "Merges": null,
+    "Merges": [
+      {
+        "Lane": 42,
+        "Nonce": 42
+      }
+    ],
     "Signature": {
       "Type": 2,
       "Data": "Ynl0ZSBhcnJheQ=="
@@ -3422,7 +4461,7 @@ Inputs:
     "ChannelAddr": "f01234",
     "TimeLockMin": 10101,
     "TimeLockMax": 10101,
-    "SecretPreimage": "Ynl0ZSBhcnJheQ==",
+    "SecretHash": "Ynl0ZSBhcnJheQ==",
     "Extra": {
       "Actor": "f01234",
       "Method": 1,
@@ -3432,7 +4471,12 @@ Inputs:
     "Nonce": 42,
     "Amount": "0",
     "MinSettleHeight": 10101,
-    "Merges": null,
+    "Merges": [
+      {
+        "Lane": 42,
+        "Nonce": 42
+      }
+    ],
     "Signature": {
       "Type": 2,
       "Data": "Ynl0ZSBhcnJheQ=="
@@ -3464,7 +4508,7 @@ Response:
     "ChannelAddr": "f01234",
     "TimeLockMin": 10101,
     "TimeLockMax": 10101,
-    "SecretPreimage": "Ynl0ZSBhcnJheQ==",
+    "SecretHash": "Ynl0ZSBhcnJheQ==",
     "Extra": {
       "Actor": "f01234",
       "Method": 1,
@@ -3474,7 +4518,12 @@ Response:
     "Nonce": 42,
     "Amount": "0",
     "MinSettleHeight": 10101,
-    "Merges": null,
+    "Merges": [
+      {
+        "Lane": 42,
+        "Nonce": 42
+      }
+    ],
     "Signature": {
       "Type": 2,
       "Data": "Ynl0ZSBhcnJheQ=="
@@ -3496,7 +4545,36 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "ChannelAddr": "f01234",
+    "TimeLockMin": 10101,
+    "TimeLockMax": 10101,
+    "SecretHash": "Ynl0ZSBhcnJheQ==",
+    "Extra": {
+      "Actor": "f01234",
+      "Method": 1,
+      "Data": "Ynl0ZSBhcnJheQ=="
+    },
+    "Lane": 42,
+    "Nonce": 42,
+    "Amount": "0",
+    "MinSettleHeight": 10101,
+    "Merges": [
+      {
+        "Lane": 42,
+        "Nonce": 42
+      }
+    ],
+    "Signature": {
+      "Type": 2,
+      "Data": "Ynl0ZSBhcnJheQ=="
+    }
+  }
+]
+```
 
 ### PaychVoucherSubmit
 
@@ -3511,7 +4589,7 @@ Inputs:
     "ChannelAddr": "f01234",
     "TimeLockMin": 10101,
     "TimeLockMax": 10101,
-    "SecretPreimage": "Ynl0ZSBhcnJheQ==",
+    "SecretHash": "Ynl0ZSBhcnJheQ==",
     "Extra": {
       "Actor": "f01234",
       "Method": 1,
@@ -3521,7 +4599,12 @@ Inputs:
     "Nonce": 42,
     "Amount": "0",
     "MinSettleHeight": 10101,
-    "Merges": null,
+    "Merges": [
+      {
+        "Lane": 42,
+        "Nonce": 42
+      }
+    ],
     "Signature": {
       "Type": 2,
       "Data": "Ynl0ZSBhcnJheQ=="
@@ -3538,6 +4621,18 @@ Response:
   "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
 }
 ```
+
+## Start
+
+
+### StartTime
+
+
+Perms: read
+
+Inputs: `null`
+
+Response: `"0001-01-01T00:00:00Z"`
 
 ## State
 The State methods are used to query, inspect, and interact with chain state.
@@ -3568,6 +4663,41 @@ Inputs:
 
 Response: `"f01234"`
 
+### StateActorCodeCIDs
+StateActorCodeCIDs returns the CIDs of all the builtin actors for the given network version
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  17
+]
+```
+
+Response: `{}`
+
+### StateActorManifestCID
+StateActorManifestCID returns the CID of the builtin actors manifest for the given network version
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  17
+]
+```
+
+Response:
+```json
+{
+  "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+}
+```
+
 ### StateAllMinerFaults
 StateAllMinerFaults returns all non-expired Faults that occur within lookback epochs of the given tipset
 
@@ -3589,7 +4719,15 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Miner": "f01234",
+    "Epoch": 10101
+  }
+]
+```
 
 ### StateCall
 StateCall runs the given message and returns its result without any persisted changes.
@@ -3691,8 +4829,73 @@ Response:
     },
     "Error": "string value",
     "Duration": 60000000000,
-    "GasCharges": null,
-    "Subcalls": null
+    "GasCharges": [
+      {
+        "Name": "string value",
+        "loc": [
+          {
+            "File": "string value",
+            "Line": 123,
+            "Function": "string value"
+          }
+        ],
+        "tg": 9,
+        "cg": 9,
+        "sg": 9,
+        "vtg": 9,
+        "vcg": 9,
+        "vsg": 9,
+        "tt": 60000000000,
+        "ex": {}
+      }
+    ],
+    "Subcalls": [
+      {
+        "Msg": {
+          "Version": 42,
+          "To": "f01234",
+          "From": "f01234",
+          "Nonce": 42,
+          "Value": "0",
+          "GasLimit": 9,
+          "GasFeeCap": "0",
+          "GasPremium": "0",
+          "Method": 1,
+          "Params": "Ynl0ZSBhcnJheQ==",
+          "CID": {
+            "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+          }
+        },
+        "MsgRct": {
+          "ExitCode": 0,
+          "Return": "Ynl0ZSBhcnJheQ==",
+          "GasUsed": 9
+        },
+        "Error": "string value",
+        "Duration": 60000000000,
+        "GasCharges": [
+          {
+            "Name": "string value",
+            "loc": [
+              {
+                "File": "string value",
+                "Line": 123,
+                "Function": "string value"
+              }
+            ],
+            "tg": 9,
+            "cg": 9,
+            "sg": 9,
+            "vtg": 9,
+            "vcg": 9,
+            "vsg": 9,
+            "tt": 60000000000,
+            "ex": {}
+          }
+        ],
+        "Subcalls": null
+      }
+    ]
   },
   "Error": "string value",
   "Duration": 60000000000
@@ -3798,7 +5001,23 @@ Inputs:
 ```json
 [
   10101,
-  null,
+  [
+    {
+      "Version": 42,
+      "To": "f01234",
+      "From": "f01234",
+      "Nonce": 42,
+      "Value": "0",
+      "GasLimit": 9,
+      "GasFeeCap": "0",
+      "GasPremium": "0",
+      "Method": 1,
+      "Params": "Ynl0ZSBhcnJheQ==",
+      "CID": {
+        "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+      }
+    }
+  ],
   [
     {
       "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
@@ -3816,7 +5035,138 @@ Response:
   "Root": {
     "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
   },
-  "Trace": null
+  "Trace": [
+    {
+      "MsgCid": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      "Msg": {
+        "Version": 42,
+        "To": "f01234",
+        "From": "f01234",
+        "Nonce": 42,
+        "Value": "0",
+        "GasLimit": 9,
+        "GasFeeCap": "0",
+        "GasPremium": "0",
+        "Method": 1,
+        "Params": "Ynl0ZSBhcnJheQ==",
+        "CID": {
+          "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+        }
+      },
+      "MsgRct": {
+        "ExitCode": 0,
+        "Return": "Ynl0ZSBhcnJheQ==",
+        "GasUsed": 9
+      },
+      "GasCost": {
+        "Message": {
+          "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+        },
+        "GasUsed": "0",
+        "BaseFeeBurn": "0",
+        "OverEstimationBurn": "0",
+        "MinerPenalty": "0",
+        "MinerTip": "0",
+        "Refund": "0",
+        "TotalCost": "0"
+      },
+      "ExecutionTrace": {
+        "Msg": {
+          "Version": 42,
+          "To": "f01234",
+          "From": "f01234",
+          "Nonce": 42,
+          "Value": "0",
+          "GasLimit": 9,
+          "GasFeeCap": "0",
+          "GasPremium": "0",
+          "Method": 1,
+          "Params": "Ynl0ZSBhcnJheQ==",
+          "CID": {
+            "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+          }
+        },
+        "MsgRct": {
+          "ExitCode": 0,
+          "Return": "Ynl0ZSBhcnJheQ==",
+          "GasUsed": 9
+        },
+        "Error": "string value",
+        "Duration": 60000000000,
+        "GasCharges": [
+          {
+            "Name": "string value",
+            "loc": [
+              {
+                "File": "string value",
+                "Line": 123,
+                "Function": "string value"
+              }
+            ],
+            "tg": 9,
+            "cg": 9,
+            "sg": 9,
+            "vtg": 9,
+            "vcg": 9,
+            "vsg": 9,
+            "tt": 60000000000,
+            "ex": {}
+          }
+        ],
+        "Subcalls": [
+          {
+            "Msg": {
+              "Version": 42,
+              "To": "f01234",
+              "From": "f01234",
+              "Nonce": 42,
+              "Value": "0",
+              "GasLimit": 9,
+              "GasFeeCap": "0",
+              "GasPremium": "0",
+              "Method": 1,
+              "Params": "Ynl0ZSBhcnJheQ==",
+              "CID": {
+                "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+              }
+            },
+            "MsgRct": {
+              "ExitCode": 0,
+              "Return": "Ynl0ZSBhcnJheQ==",
+              "GasUsed": 9
+            },
+            "Error": "string value",
+            "Duration": 60000000000,
+            "GasCharges": [
+              {
+                "Name": "string value",
+                "loc": [
+                  {
+                    "File": "string value",
+                    "Line": 123,
+                    "Function": "string value"
+                  }
+                ],
+                "tg": 9,
+                "cg": 9,
+                "sg": 9,
+                "vtg": 9,
+                "vcg": 9,
+                "vsg": 9,
+                "tt": 60000000000,
+                "ex": {}
+              }
+            ],
+            "Subcalls": null
+          }
+        ]
+      },
+      "Error": "string value",
+      "Duration": 60000000000
+    }
+  ]
 }
 ```
 
@@ -3911,6 +5261,208 @@ Response:
 }
 ```
 
+### StateGetAllocation
+StateGetAllocation returns the allocation for a given address and allocation ID.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "f01234",
+  0,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response:
+```json
+{
+  "Client": 1000,
+  "Provider": 1000,
+  "Data": {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  },
+  "Size": 1032,
+  "TermMin": 10101,
+  "TermMax": 10101,
+  "Expiration": 10101
+}
+```
+
+### StateGetAllocationForPendingDeal
+StateGetAllocationForPendingDeal returns the allocation for a given deal ID of a pending deal.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  5432,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response:
+```json
+{
+  "Client": 1000,
+  "Provider": 1000,
+  "Data": {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  },
+  "Size": 1032,
+  "TermMin": 10101,
+  "TermMax": 10101,
+  "Expiration": 10101
+}
+```
+
+### StateGetAllocations
+StateGetAllocations returns the all the allocations for a given client.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "f01234",
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response: `{}`
+
+### StateGetClaim
+StateGetClaim returns the claim for a given address and claim ID.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "f01234",
+  0,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response:
+```json
+{
+  "Provider": 1000,
+  "Client": 1000,
+  "Data": {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  },
+  "Size": 1032,
+  "TermMin": 10101,
+  "TermMax": 10101,
+  "TermStart": 10101,
+  "Sector": 9
+}
+```
+
+### StateGetClaims
+StateGetClaims returns the all the claims for a given provider.
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "f01234",
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response: `{}`
+
+### StateGetNetworkParams
+StateGetNetworkParams return current network params
+
+
+Perms: read
+
+Inputs: `null`
+
+Response:
+```json
+{
+  "NetworkName": "lotus",
+  "BlockDelaySecs": 42,
+  "ConsensusMinerMinPower": "0",
+  "SupportedProofTypes": [
+    8
+  ],
+  "PreCommitChallengeDelay": 10101,
+  "ForkUpgradeParams": {
+    "UpgradeSmokeHeight": 10101,
+    "UpgradeBreezeHeight": 10101,
+    "UpgradeIgnitionHeight": 10101,
+    "UpgradeLiftoffHeight": 10101,
+    "UpgradeAssemblyHeight": 10101,
+    "UpgradeRefuelHeight": 10101,
+    "UpgradeTapeHeight": 10101,
+    "UpgradeKumquatHeight": 10101,
+    "UpgradePriceListOopsHeight": 10101,
+    "BreezeGasTampingDuration": 10101,
+    "UpgradeCalicoHeight": 10101,
+    "UpgradePersianHeight": 10101,
+    "UpgradeOrangeHeight": 10101,
+    "UpgradeClausHeight": 10101,
+    "UpgradeTrustHeight": 10101,
+    "UpgradeNorwegianHeight": 10101,
+    "UpgradeTurboHeight": 10101,
+    "UpgradeHyperdriveHeight": 10101,
+    "UpgradeChocolateHeight": 10101,
+    "UpgradeOhSnapHeight": 10101,
+    "UpgradeSkyrHeight": 10101,
+    "UpgradeSharkHeight": 10101
+  }
+}
+```
+
 ### StateGetRandomnessFromBeacon
 StateGetRandomnessFromBeacon is used to sample the beacon for randomness.
 
@@ -3934,7 +5486,7 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response: `"Bw=="`
 
 ### StateGetRandomnessFromTickets
 StateGetRandomnessFromTickets is used to sample the chain for randomness.
@@ -3959,7 +5511,7 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response: `"Bw=="`
 
 ### StateGetReceipt
 StateGetReceipt returns the message receipt for the given message or for a
@@ -4021,7 +5573,12 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  "f01234"
+]
+```
 
 ### StateListMessages
 StateListMessages looks back and returns all messages with a matching to or from address, stopping at the given height.
@@ -4048,7 +5605,14 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
+]
+```
 
 ### StateListMiners
 StateListMiners returns the addresses of every miner that has claimed power in the Power Actor
@@ -4070,7 +5634,12 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  "f01234"
+]
+```
 
 ### StateLookupID
 StateLookupID retrieves the ID address of the given address
@@ -4156,7 +5725,7 @@ Response:
       "VerifiedDeal": true,
       "Client": "f01234",
       "Provider": "f01234",
-      "Label": "string value",
+      "Label": "",
       "StartEpoch": 10101,
       "EndEpoch": 10101,
       "StoragePricePerEpoch": "0",
@@ -4166,7 +5735,8 @@ Response:
     "State": {
       "SectorStartEpoch": 10101,
       "LastUpdatedEpoch": 10101,
-      "SlashEpoch": 10101
+      "SlashEpoch": 10101,
+      "VerifiedClaim": 0
     }
   }
 }
@@ -4234,7 +5804,7 @@ Response:
     "VerifiedDeal": true,
     "Client": "f01234",
     "Provider": "f01234",
-    "Label": "string value",
+    "Label": "",
     "StartEpoch": 10101,
     "EndEpoch": 10101,
     "StoragePricePerEpoch": "0",
@@ -4244,7 +5814,8 @@ Response:
   "State": {
     "SectorStartEpoch": 10101,
     "LastUpdatedEpoch": 10101,
-    "SlashEpoch": 10101
+    "SlashEpoch": 10101,
+    "VerifiedClaim": 0
   }
 }
 ```
@@ -4270,7 +5841,32 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "SectorNumber": 9,
+    "SealProof": 8,
+    "SealedCID": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "DealIDs": [
+      5432
+    ],
+    "Activation": 10101,
+    "Expiration": 10101,
+    "DealWeight": "0",
+    "VerifiedDealWeight": "0",
+    "InitialPledge": "0",
+    "ExpectedDayReward": "0",
+    "ExpectedStoragePledge": "0",
+    "ReplacedSectorAge": 10101,
+    "ReplacedDayReward": "0",
+    "SectorKeyCID": null,
+    "SimpleQAPower": true
+  }
+]
+```
 
 ### StateMinerAvailableBalance
 StateMinerAvailableBalance returns the portion of a miner's balance that can be withdrawn or spent
@@ -4316,7 +5912,18 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "PostSubmissions": [
+      5,
+      1
+    ],
+    "DisputableProofCount": 42
+  }
+]
+```
 
 ### StateMinerFaults
 StateMinerFaults returns a bitfield indicating the faulty sectors of the given miner
@@ -4374,14 +5981,31 @@ Response:
   "Owner": "f01234",
   "Worker": "f01234",
   "NewWorker": "f01234",
-  "ControlAddresses": null,
+  "ControlAddresses": [
+    "f01234"
+  ],
   "WorkerChangeEpoch": 10101,
   "PeerId": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
-  "Multiaddrs": null,
+  "Multiaddrs": [
+    "Ynl0ZSBhcnJheQ=="
+  ],
   "WindowPoStProofType": 8,
   "SectorSize": 34359738368,
   "WindowPoStPartitionSectors": 42,
-  "ConsensusFaultElapsed": 10101
+  "ConsensusFaultElapsed": 10101,
+  "Beneficiary": "f01234",
+  "BeneficiaryTerm": {
+    "Quota": "0",
+    "UsedQuota": "0",
+    "Expiration": 10101
+  },
+  "PendingBeneficiaryTerm": {
+    "NewBeneficiary": "f01234",
+    "NewQuota": "0",
+    "NewExpiration": 10101,
+    "ApprovedByBeneficiary": true,
+    "ApprovedByNominee": true
+  }
 }
 ```
 
@@ -4402,12 +6026,11 @@ Inputs:
       "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
     },
     "SealRandEpoch": 10101,
-    "DealIDs": null,
+    "DealIDs": [
+      5432
+    ],
     "Expiration": 10101,
-    "ReplaceCapacity": true,
-    "ReplaceSectorDeadline": 42,
-    "ReplaceSectorPartition": 42,
-    "ReplaceSectorNumber": 9
+    "UnsealedCid": null
   },
   [
     {
@@ -4444,7 +6067,33 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "AllSectors": [
+      5,
+      1
+    ],
+    "FaultySectors": [
+      5,
+      1
+    ],
+    "RecoveringSectors": [
+      5,
+      1
+    ],
+    "LiveSectors": [
+      5,
+      1
+    ],
+    "ActiveSectors": [
+      5,
+      1
+    ]
+  }
+]
+```
 
 ### StateMinerPower
 StateMinerPower returns the power of the indicated miner
@@ -4499,12 +6148,11 @@ Inputs:
       "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
     },
     "SealRandEpoch": 10101,
-    "DealIDs": null,
+    "DealIDs": [
+      5432
+    ],
     "Expiration": 10101,
-    "ReplaceCapacity": true,
-    "ReplaceSectorDeadline": 42,
-    "ReplaceSectorPartition": 42,
-    "ReplaceSectorNumber": 9
+    "UnsealedCid": null
   },
   [
     {
@@ -4666,7 +6314,32 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "SectorNumber": 9,
+    "SealProof": 8,
+    "SealedCID": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "DealIDs": [
+      5432
+    ],
+    "Activation": 10101,
+    "Expiration": 10101,
+    "DealWeight": "0",
+    "VerifiedDealWeight": "0",
+    "InitialPledge": "0",
+    "ExpectedDayReward": "0",
+    "ExpectedStoragePledge": "0",
+    "ReplacedSectorAge": 10101,
+    "ReplacedDayReward": "0",
+    "SectorKeyCID": null,
+    "SimpleQAPower": true
+  }
+]
+```
 
 ### StateNetworkName
 StateNetworkName returns the name of the network the node is synced to
@@ -4698,7 +6371,7 @@ Inputs:
 ]
 ```
 
-Response: `13`
+Response: `17`
 
 ### StateReadState
 StateReadState returns the indicated actor's state.
@@ -4735,7 +6408,7 @@ Response:
 ### StateReplay
 StateReplay replays a given message, assuming it was included in a block in the specified tipset.
 
-If a tipset key is provided, and a replacing message is found on chain,
+If a tipset key is provided, and a replacing message is not found on chain,
 the method will return an error saying that the message wasn't found
 
 If no tipset key is provided, the appropriate tipset is looked up, and if
@@ -4832,8 +6505,73 @@ Response:
     },
     "Error": "string value",
     "Duration": 60000000000,
-    "GasCharges": null,
-    "Subcalls": null
+    "GasCharges": [
+      {
+        "Name": "string value",
+        "loc": [
+          {
+            "File": "string value",
+            "Line": 123,
+            "Function": "string value"
+          }
+        ],
+        "tg": 9,
+        "cg": 9,
+        "sg": 9,
+        "vtg": 9,
+        "vcg": 9,
+        "vsg": 9,
+        "tt": 60000000000,
+        "ex": {}
+      }
+    ],
+    "Subcalls": [
+      {
+        "Msg": {
+          "Version": 42,
+          "To": "f01234",
+          "From": "f01234",
+          "Nonce": 42,
+          "Value": "0",
+          "GasLimit": 9,
+          "GasFeeCap": "0",
+          "GasPremium": "0",
+          "Method": 1,
+          "Params": "Ynl0ZSBhcnJheQ==",
+          "CID": {
+            "/": "bafy2bzacebbpdegvr3i4cosewthysg5xkxpqfn2wfcz6mv2hmoktwbdxkax4s"
+          }
+        },
+        "MsgRct": {
+          "ExitCode": 0,
+          "Return": "Ynl0ZSBhcnJheQ==",
+          "GasUsed": 9
+        },
+        "Error": "string value",
+        "Duration": 60000000000,
+        "GasCharges": [
+          {
+            "Name": "string value",
+            "loc": [
+              {
+                "File": "string value",
+                "Line": 123,
+                "Function": "string value"
+              }
+            ],
+            "tg": 9,
+            "cg": 9,
+            "sg": 9,
+            "vtg": 9,
+            "vcg": 9,
+            "vsg": 9,
+            "tt": 60000000000,
+            "ex": {}
+          }
+        ],
+        "Subcalls": null
+      }
+    ]
   },
   "Error": "string value",
   "Duration": 60000000000
@@ -5009,14 +6747,20 @@ Response:
   "SealedCID": {
     "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
   },
-  "DealIDs": null,
+  "DealIDs": [
+    5432
+  ],
   "Activation": 10101,
   "Expiration": 10101,
   "DealWeight": "0",
   "VerifiedDealWeight": "0",
   "InitialPledge": "0",
   "ExpectedDayReward": "0",
-  "ExpectedStoragePledge": "0"
+  "ExpectedStoragePledge": "0",
+  "ReplacedSectorAge": 10101,
+  "ReplacedDayReward": "0",
+  "SectorKeyCID": null,
+  "SimpleQAPower": true
 }
 ```
 
@@ -5082,17 +6826,14 @@ Response:
       "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
     },
     "SealRandEpoch": 10101,
-    "DealIDs": null,
+    "DealIDs": [
+      5432
+    ],
     "Expiration": 10101,
-    "ReplaceCapacity": true,
-    "ReplaceSectorDeadline": 42,
-    "ReplaceSectorPartition": 42,
-    "ReplaceSectorNumber": 9
+    "UnsealedCid": null
   },
   "PreCommitDeposit": "0",
-  "PreCommitEpoch": 10101,
-  "DealWeight": "0",
-  "VerifiedDealWeight": "0"
+  "PreCommitEpoch": 10101
 }
 ```
 
@@ -5155,7 +6896,7 @@ Inputs:
 Response: `"0"`
 
 ### StateVerifiedRegistryRootKey
-StateVerifiedClientStatus returns the address of the Verified Registry's root key
+StateVerifiedRegistryRootKey returns the address of the Verified Registry's root key
 
 
 Perms: read
@@ -5378,9 +7119,23 @@ Response:
     "WinCount": 9,
     "VRFProof": "Ynl0ZSBhcnJheQ=="
   },
-  "BeaconEntries": null,
-  "WinPoStProof": null,
-  "Parents": null,
+  "BeaconEntries": [
+    {
+      "Round": 42,
+      "Data": "Ynl0ZSBhcnJheQ=="
+    }
+  ],
+  "WinPoStProof": [
+    {
+      "PoStProof": 8,
+      "ProofBytes": "Ynl0ZSBhcnJheQ=="
+    }
+  ],
+  "Parents": [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    }
+  ],
   "ParentWeight": "0",
   "Height": 10101,
   "ParentStateRoot": {
@@ -5435,7 +7190,26 @@ Inputs: `null`
 Response:
 ```json
 {
-  "ActiveSyncs": null,
+  "ActiveSyncs": [
+    {
+      "WorkerID": 42,
+      "Base": {
+        "Cids": null,
+        "Blocks": null,
+        "Height": 0
+      },
+      "Target": {
+        "Cids": null,
+        "Blocks": null,
+        "Height": 0
+      },
+      "Stage": 1,
+      "Height": 10101,
+      "Start": "0001-01-01T00:00:00Z",
+      "End": "0001-01-01T00:00:00Z",
+      "Message": "string value"
+    }
+  ],
   "VMApplied": 42
 }
 ```
@@ -5460,9 +7234,23 @@ Inputs:
         "WinCount": 9,
         "VRFProof": "Ynl0ZSBhcnJheQ=="
       },
-      "BeaconEntries": null,
-      "WinPoStProof": null,
-      "Parents": null,
+      "BeaconEntries": [
+        {
+          "Round": 42,
+          "Data": "Ynl0ZSBhcnJheQ=="
+        }
+      ],
+      "WinPoStProof": [
+        {
+          "PoStProof": 8,
+          "ProofBytes": "Ynl0ZSBhcnJheQ=="
+        }
+      ],
+      "Parents": [
+        {
+          "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+        }
+      ],
       "ParentWeight": "0",
       "Height": 10101,
       "ParentStateRoot": {
@@ -5486,8 +7274,16 @@ Inputs:
       "ForkSignaling": 42,
       "ParentBaseFee": "0"
     },
-    "BlsMessages": null,
-    "SecpkMessages": null
+    "BlsMessages": [
+      {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      }
+    ],
+    "SecpkMessages": [
+      {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      }
+    ]
   }
 ]
 ```
@@ -5648,7 +7444,12 @@ Perms: write
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  "f01234"
+]
+```
 
 ### WalletNew
 WalletNew creates a new address in the wallet with the given sigType.

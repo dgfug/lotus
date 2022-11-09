@@ -1,3 +1,4 @@
+// stm: #unit
 package gateway
 
 import (
@@ -15,7 +16,6 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/types/mock"
 )
@@ -89,11 +89,12 @@ func TestGatewayAPIChainGetTipSetByHeight(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			mock := &mockGatewayDepsAPI{}
-			a := NewNode(mock, DefaultLookbackCap, DefaultStateWaitLookbackLimit)
+			a := NewNode(mock, DefaultLookbackCap, DefaultStateWaitLookbackLimit, 0, time.Minute)
 
 			// Create tipsets from genesis up to tskh and return the highest
 			ts := mock.createTipSets(tt.args.tskh, tt.args.genesisTS)
 
+			//stm: @GATEWAY_NODE_GET_TIPSET_BY_HEIGHT_001
 			got, err := a.ChainGetTipSetByHeight(ctx, tt.args.h, ts.Key())
 			if tt.expErr {
 				require.Error(t, err)
@@ -141,7 +142,7 @@ func (m *mockGatewayDepsAPI) StateMarketStorageDeal(ctx context.Context, dealId 
 	panic("implement me")
 }
 
-func (m *mockGatewayDepsAPI) StateMinerInfo(ctx context.Context, actor address.Address, tsk types.TipSetKey) (miner.MinerInfo, error) {
+func (m *mockGatewayDepsAPI) StateMinerInfo(ctx context.Context, actor address.Address, tsk types.TipSetKey) (api.MinerInfo, error) {
 	panic("implement me")
 }
 
@@ -241,11 +242,36 @@ func (m *mockGatewayDepsAPI) Version(context.Context) (api.APIVersion, error) {
 }
 
 func TestGatewayVersion(t *testing.T) {
+	//stm: @GATEWAY_NODE_GET_VERSION_001
 	ctx := context.Background()
 	mock := &mockGatewayDepsAPI{}
-	a := NewNode(mock, DefaultLookbackCap, DefaultStateWaitLookbackLimit)
+	a := NewNode(mock, DefaultLookbackCap, DefaultStateWaitLookbackLimit, 0, time.Minute)
 
 	v, err := a.Version(ctx)
 	require.NoError(t, err)
 	require.Equal(t, api.FullAPIVersion1, v.APIVersion)
+}
+
+func TestGatewayLimitTokensAvailable(t *testing.T) {
+	ctx := context.Background()
+	mock := &mockGatewayDepsAPI{}
+	tokens := 3
+	a := NewNode(mock, DefaultLookbackCap, DefaultStateWaitLookbackLimit, int64(tokens), time.Minute)
+	require.NoError(t, a.limit(ctx, tokens), "requests should not be limited when there are enough tokens available")
+}
+
+func TestGatewayLimitTokensNotAvailable(t *testing.T) {
+	ctx := context.Background()
+	mock := &mockGatewayDepsAPI{}
+	tokens := 3
+	a := NewNode(mock, DefaultLookbackCap, DefaultStateWaitLookbackLimit, int64(1), time.Millisecond)
+	var err error
+	// try to be rate limited
+	for i := 0; i <= 1000; i++ {
+		err = a.limit(ctx, tokens)
+		if err != nil {
+			break
+		}
+	}
+	require.Error(t, err, "requiests should be rate limited when they hit limits")
 }

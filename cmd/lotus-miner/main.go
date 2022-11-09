@@ -7,16 +7,14 @@ import (
 	"github.com/fatih/color"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/urfave/cli/v2"
-	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
-
-	cliutil "github.com/filecoin-project/lotus/cli/util"
 
 	"github.com/filecoin-project/go-address"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	lcli "github.com/filecoin-project/lotus/cli"
+	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/filecoin-project/lotus/lib/lotuslog"
 	"github.com/filecoin-project/lotus/lib/tracing"
 	"github.com/filecoin-project/lotus/node/repo"
@@ -49,16 +47,18 @@ func main() {
 		lcli.WithCategory("market", retrievalDealsCmd),
 		lcli.WithCategory("market", dataTransfersCmd),
 		lcli.WithCategory("market", dagstoreCmd),
+		lcli.WithCategory("market", indexProvCmd),
 		lcli.WithCategory("storage", sectorsCmd),
 		lcli.WithCategory("storage", provingCmd),
 		lcli.WithCategory("storage", storageCmd),
 		lcli.WithCategory("storage", sealingCmd),
 		lcli.WithCategory("retrieval", piecesCmd),
 	}
+
 	jaeger := tracing.SetupJaegerTracing("lotus")
 	defer func() {
 		if jaeger != nil {
-			jaeger.Flush()
+			_ = jaeger.ForceFlush(context.Background())
 		}
 	}()
 
@@ -66,7 +66,9 @@ func main() {
 		cmd := cmd
 		originBefore := cmd.Before
 		cmd.Before = func(cctx *cli.Context) error {
-			trace.UnregisterExporter(jaeger)
+			if jaeger != nil {
+				_ = jaeger.Shutdown(cctx.Context)
+			}
 			jaeger = tracing.SetupJaegerTracing("lotus/" + cmd.Name)
 
 			if cctx.IsSet("color") {
@@ -175,13 +177,13 @@ func getActorAddress(ctx context.Context, cctx *cli.Context) (maddr address.Addr
 		return
 	}
 
-	nodeAPI, closer, err := lcli.GetStorageMinerAPI(cctx)
+	minerApi, closer, err := lcli.GetStorageMinerAPI(cctx)
 	if err != nil {
 		return address.Undef, err
 	}
 	defer closer()
 
-	maddr, err = nodeAPI.ActorAddress(ctx)
+	maddr, err = minerApi.ActorAddress(ctx)
 	if err != nil {
 		return maddr, xerrors.Errorf("getting actor address: %w", err)
 	}

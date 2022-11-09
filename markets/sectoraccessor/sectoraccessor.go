@@ -4,23 +4,23 @@ import (
 	"context"
 	"io"
 
+	"github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/dagstore/mount"
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
+	"github.com/filecoin-project/go-state-types/abi"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/types"
-	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
-	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
+	"github.com/filecoin-project/lotus/markets/dagstore"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/filecoin-project/lotus/storage/sealer"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 	"github.com/filecoin-project/lotus/storage/sectorblocks"
-
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
-	"github.com/filecoin-project/go-state-types/abi"
-	specstorage "github.com/filecoin-project/specs-storage/storage"
-
-	"github.com/ipfs/go-cid"
-	logging "github.com/ipfs/go-log/v2"
 )
 
 var log = logging.Logger("sectoraccessor")
@@ -28,18 +28,22 @@ var log = logging.Logger("sectoraccessor")
 type sectorAccessor struct {
 	maddr address.Address
 	secb  sectorblocks.SectorBuilder
-	pp    sectorstorage.PieceProvider
+	pp    sealer.PieceProvider
 	full  v1api.FullNode
 }
 
 var _ retrievalmarket.SectorAccessor = (*sectorAccessor)(nil)
 
-func NewSectorAccessor(maddr dtypes.MinerAddress, secb sectorblocks.SectorBuilder, pp sectorstorage.PieceProvider, full v1api.FullNode) retrievalmarket.SectorAccessor {
+func NewSectorAccessor(maddr dtypes.MinerAddress, secb sectorblocks.SectorBuilder, pp sealer.PieceProvider, full v1api.FullNode) dagstore.SectorAccessor {
 	return &sectorAccessor{address.Address(maddr), secb, pp, full}
 }
 
-func (sa *sectorAccessor) UnsealSector(ctx context.Context, sectorID abi.SectorNumber, offset abi.UnpaddedPieceSize, length abi.UnpaddedPieceSize) (io.ReadCloser, error) {
-	log.Debugf("get sector %d, offset %d, length %d", sectorID, offset, length)
+func (sa *sectorAccessor) UnsealSector(ctx context.Context, sectorID abi.SectorNumber, pieceOffset abi.UnpaddedPieceSize, length abi.UnpaddedPieceSize) (io.ReadCloser, error) {
+	return sa.UnsealSectorAt(ctx, sectorID, pieceOffset, length)
+}
+
+func (sa *sectorAccessor) UnsealSectorAt(ctx context.Context, sectorID abi.SectorNumber, pieceOffset abi.UnpaddedPieceSize, length abi.UnpaddedPieceSize) (mount.Reader, error) {
+	log.Debugf("get sector %d, pieceOffset %d, length %d", sectorID, pieceOffset, length)
 	si, err := sa.sectorsStatus(ctx, sectorID, false)
 	if err != nil {
 		return nil, err
@@ -50,7 +54,7 @@ func (sa *sectorAccessor) UnsealSector(ctx context.Context, sectorID abi.SectorN
 		return nil, err
 	}
 
-	ref := specstorage.SectorRef{
+	ref := storiface.SectorRef{
 		ID: abi.SectorID{
 			Miner:  abi.ActorID(mid),
 			Number: sectorID,
@@ -64,8 +68,8 @@ func (sa *sectorAccessor) UnsealSector(ctx context.Context, sectorID abi.SectorN
 	}
 
 	// Get a reader for the piece, unsealing the piece if necessary
-	log.Debugf("read piece in sector %d, offset %d, length %d from miner %d", sectorID, offset, length, mid)
-	r, unsealed, err := sa.pp.ReadPiece(ctx, ref, storiface.UnpaddedByteIndex(offset), length, si.Ticket.Value, commD)
+	log.Debugf("read piece in sector %d, pieceOffset %d, length %d from miner %d", sectorID, pieceOffset, length, mid)
+	r, unsealed, err := sa.pp.ReadPiece(ctx, ref, storiface.UnpaddedByteIndex(pieceOffset), length, si.Ticket.Value, commD)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to unseal piece from sector %d: %w", sectorID, err)
 	}
@@ -85,7 +89,7 @@ func (sa *sectorAccessor) IsUnsealed(ctx context.Context, sectorID abi.SectorNum
 		return false, err
 	}
 
-	ref := specstorage.SectorRef{
+	ref := storiface.SectorRef{
 		ID: abi.SectorID{
 			Miner:  abi.ActorID(mid),
 			Number: sectorID,

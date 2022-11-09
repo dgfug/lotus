@@ -6,29 +6,31 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	textselector "github.com/ipld/go-ipld-selector-text-lite"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-state-types/crypto"
-	"github.com/filecoin-project/go-state-types/dline"
-
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/builtin/v8/paych"
+	"github.com/filecoin-project/go-state-types/builtin/v9/market"
+	"github.com/filecoin-project/go-state-types/builtin/v9/miner"
+	verifregtypes "github.com/filecoin-project/go-state-types/builtin/v9/verifreg"
+	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/go-state-types/dline"
+	abinetwork "github.com/filecoin-project/go-state-types/network"
 
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
+	lminer "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/types"
-	marketevents "github.com/filecoin-project/lotus/markets/loggers"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/repo/imports"
 )
@@ -39,6 +41,7 @@ import (
 type ChainIO interface {
 	ChainReadObj(context.Context, cid.Cid) ([]byte, error)
 	ChainHasObj(context.Context, cid.Cid) (bool, error)
+	ChainPutObj(context.Context, blocks.Block) error
 }
 
 const LookbackNoLimit = abi.ChainEpoch(-1)
@@ -124,6 +127,9 @@ type FullNode interface {
 	// ChainHasObj checks if a given CID exists in the chain blockstore.
 	ChainHasObj(context.Context, cid.Cid) (bool, error) //perm:read
 
+	// ChainPutObj puts a given object into the block store
+	ChainPutObj(context.Context, blocks.Block) error //perm:admin
+
 	// ChainStatObj returns statistics about the graph referenced by 'obj'.
 	// If 'base' is also specified, then the returned stat will be a diff
 	// between the two objects.
@@ -165,20 +171,16 @@ type FullNode interface {
 	// If oldmsgskip is set, messages from before the requested roots are also not included.
 	ChainExport(ctx context.Context, nroots abi.ChainEpoch, oldmsgskip bool, tsk types.TipSetKey) (<-chan []byte, error) //perm:read
 
+	// ChainPrune prunes the stored chain state and garbage collects; only supported if you
+	// are using the splitstore
+	ChainPrune(ctx context.Context, opts PruneOpts) error //perm:admin
+
 	// ChainCheckBlockstore performs an (asynchronous) health check on the chain/state blockstore
 	// if supported by the underlying implementation.
 	ChainCheckBlockstore(context.Context) error //perm:admin
 
 	// ChainBlockstoreInfo returns some basic information about the blockstore
 	ChainBlockstoreInfo(context.Context) (map[string]interface{}, error) //perm:read
-
-	// MethodGroup: Beacon
-	// The Beacon method group contains methods for interacting with the random beacon (DRAND)
-
-	// BeaconGetEntry returns the beacon entry for the given filecoin epoch. If
-	// the entry has not yet been produced, the call will block until the entry
-	// becomes available
-	BeaconGetEntry(ctx context.Context, epoch abi.ChainEpoch) (*types.BeaconEntry, error) //perm:read
 
 	// GasEstimateFeeCap estimates gas fee cap
 	GasEstimateFeeCap(context.Context, *types.Message, int64, types.TipSetKey) (types.BigInt, error) //perm:read
@@ -291,7 +293,7 @@ type FullNode interface {
 
 	// // UX ?
 
-	// MethodGroup: Wallet
+	// MethodGroup: WalletF
 
 	// WalletNew creates a new address in the wallet with the given sigType.
 	// Available key types: bls, secp256k1, secp256k1-ledger
@@ -352,16 +354,17 @@ type FullNode interface {
 	// ClientMinerQueryOffer returns a QueryOffer for the specific miner and file.
 	ClientMinerQueryOffer(ctx context.Context, miner address.Address, root cid.Cid, piece *cid.Cid) (QueryOffer, error) //perm:read
 	// ClientRetrieve initiates the retrieval of a file, as specified in the order.
-	ClientRetrieve(ctx context.Context, order RetrievalOrder, ref *FileRef) error //perm:admin
-	// ClientRetrieveWithEvents initiates the retrieval of a file, as specified in the order, and provides a channel
-	// of status updates.
-	ClientRetrieveWithEvents(ctx context.Context, order RetrievalOrder, ref *FileRef) (<-chan marketevents.RetrievalEvent, error) //perm:admin
+	ClientRetrieve(ctx context.Context, params RetrievalOrder) (*RestrievalRes, error) //perm:admin
+	// ClientRetrieveWait waits for retrieval to be complete
+	ClientRetrieveWait(ctx context.Context, deal retrievalmarket.DealID) error //perm:admin
+	// ClientExport exports a file stored in the local filestore to a system file
+	ClientExport(ctx context.Context, exportRef ExportRef, fileRef FileRef) error //perm:admin
 	// ClientListRetrievals returns information about retrievals made by the local client
 	ClientListRetrievals(ctx context.Context) ([]RetrievalInfo, error) //perm:write
 	// ClientGetRetrievalUpdates returns status of updated retrieval deals
 	ClientGetRetrievalUpdates(ctx context.Context) (<-chan RetrievalInfo, error) //perm:write
 	// ClientQueryAsk returns a signed StorageAsk from the specified miner.
-	ClientQueryAsk(ctx context.Context, p peer.ID, miner address.Address) (*storagemarket.StorageAsk, error) //perm:read
+	ClientQueryAsk(ctx context.Context, p peer.ID, miner address.Address) (*StorageAsk, error) //perm:read
 	// ClientCalcCommP calculates the CommP and data size of the specified CID
 	ClientDealPieceCID(ctx context.Context, root cid.Cid) (DataCIDSize, error) //perm:read
 	// ClientCalcCommP calculates the CommP for a specified file
@@ -405,7 +408,7 @@ type FullNode interface {
 	StateCall(context.Context, *types.Message, types.TipSetKey) (*InvocResult, error) //perm:read
 	// StateReplay replays a given message, assuming it was included in a block in the specified tipset.
 	//
-	// If a tipset key is provided, and a replacing message is found on chain,
+	// If a tipset key is provided, and a replacing message is not found on chain,
 	// the method will return an error saying that the message wasn't found
 	//
 	// If no tipset key is provided, the appropriate tipset is looked up, and if
@@ -444,7 +447,7 @@ type FullNode interface {
 	// StateMinerPower returns the power of the indicated miner
 	StateMinerPower(context.Context, address.Address, types.TipSetKey) (*MinerPower, error) //perm:read
 	// StateMinerInfo returns info about the indicated miner
-	StateMinerInfo(context.Context, address.Address, types.TipSetKey) (miner.MinerInfo, error) //perm:read
+	StateMinerInfo(context.Context, address.Address, types.TipSetKey) (MinerInfo, error) //perm:read
 	// StateMinerDeadlines returns all the proving deadlines for the given miner
 	StateMinerDeadlines(context.Context, address.Address, types.TipSetKey) ([]Deadline, error) //perm:read
 	// StateMinerPartitions returns all partitions in the specified deadline
@@ -461,18 +464,23 @@ type FullNode interface {
 	StateMinerInitialPledgeCollateral(context.Context, address.Address, miner.SectorPreCommitInfo, types.TipSetKey) (types.BigInt, error) //perm:read
 	// StateMinerAvailableBalance returns the portion of a miner's balance that can be withdrawn or spent
 	StateMinerAvailableBalance(context.Context, address.Address, types.TipSetKey) (types.BigInt, error) //perm:read
-	// StateMinerSectorAllocated checks if a sector is allocated
+	// StateMinerSectorAllocated checks if a sector number is marked as allocated.
 	StateMinerSectorAllocated(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (bool, error) //perm:read
-	// StateSectorPreCommitInfo returns the PreCommit info for the specified miner's sector
-	StateSectorPreCommitInfo(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (miner.SectorPreCommitOnChainInfo, error) //perm:read
+	// StateSectorPreCommitInfo returns the PreCommit info for the specified miner's sector.
+	// Returns nil and no error if the sector isn't precommitted.
+	//
+	// Note that the sector number may be allocated while PreCommitInfo is nil. This means that either allocated sector
+	// numbers were compacted, and the sector number was marked as allocated in order to reduce size of the allocated
+	// sectors bitfield, or that the sector was precommitted, but the precommit has expired.
+	StateSectorPreCommitInfo(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (*miner.SectorPreCommitOnChainInfo, error) //perm:read
 	// StateSectorGetInfo returns the on-chain info for the specified miner's sector. Returns null in case the sector info isn't found
 	// NOTE: returned info.Expiration may not be accurate in some cases, use StateSectorExpiration to get accurate
 	// expiration epoch
 	StateSectorGetInfo(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (*miner.SectorOnChainInfo, error) //perm:read
 	// StateSectorExpiration returns epoch at which given sector will expire
-	StateSectorExpiration(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (*miner.SectorExpiration, error) //perm:read
+	StateSectorExpiration(context.Context, address.Address, abi.SectorNumber, types.TipSetKey) (*lminer.SectorExpiration, error) //perm:read
 	// StateSectorPartition finds deadline/partition with the specified sector
-	StateSectorPartition(ctx context.Context, maddr address.Address, sectorNumber abi.SectorNumber, tok types.TipSetKey) (*miner.SectorLocation, error) //perm:read
+	StateSectorPartition(ctx context.Context, maddr address.Address, sectorNumber abi.SectorNumber, tok types.TipSetKey) (*lminer.SectorLocation, error) //perm:read
 	// StateSearchMsg looks back up to limit epochs in the chain for a message, and returns its receipt and the tipset where it was executed
 	//
 	// NOTE: If a replacing message is found on chain, this method will return
@@ -518,18 +526,35 @@ type FullNode interface {
 	// StateMarketParticipants returns the Escrow and Locked balances of every participant in the Storage Market
 	StateMarketParticipants(context.Context, types.TipSetKey) (map[string]MarketBalance, error) //perm:read
 	// StateMarketDeals returns information about every deal in the Storage Market
-	StateMarketDeals(context.Context, types.TipSetKey) (map[string]MarketDeal, error) //perm:read
+	StateMarketDeals(context.Context, types.TipSetKey) (map[string]*MarketDeal, error) //perm:read
 	// StateMarketStorageDeal returns information about the indicated deal
 	StateMarketStorageDeal(context.Context, abi.DealID, types.TipSetKey) (*MarketDeal, error) //perm:read
+	// StateGetAllocationForPendingDeal returns the allocation for a given deal ID of a pending deal. Returns nil if
+	// pending allocation is not found.
+	StateGetAllocationForPendingDeal(ctx context.Context, dealId abi.DealID, tsk types.TipSetKey) (*verifregtypes.Allocation, error) //perm:read
+	// StateGetAllocation returns the allocation for a given address and allocation ID.
+	StateGetAllocation(ctx context.Context, clientAddr address.Address, allocationId verifregtypes.AllocationId, tsk types.TipSetKey) (*verifregtypes.Allocation, error) //perm:read
+	// StateGetAllocations returns the all the allocations for a given client.
+	StateGetAllocations(ctx context.Context, clientAddr address.Address, tsk types.TipSetKey) (map[verifregtypes.AllocationId]verifregtypes.Allocation, error) //perm:read
+	// StateGetClaim returns the claim for a given address and claim ID.
+	StateGetClaim(ctx context.Context, providerAddr address.Address, claimId verifregtypes.ClaimId, tsk types.TipSetKey) (*verifregtypes.Claim, error) //perm:read
+	// StateGetClaims returns the all the claims for a given provider.
+	StateGetClaims(ctx context.Context, providerAddr address.Address, tsk types.TipSetKey) (map[verifregtypes.ClaimId]verifregtypes.Claim, error) //perm:read
+	// StateComputeDataCID computes DataCID from a set of on-chain deals
+	StateComputeDataCID(ctx context.Context, maddr address.Address, sectorType abi.RegisteredSealProof, deals []abi.DealID, tsk types.TipSetKey) (cid.Cid, error) //perm:read
 	// StateLookupID retrieves the ID address of the given address
 	StateLookupID(context.Context, address.Address, types.TipSetKey) (address.Address, error) //perm:read
-	// StateAccountKey returns the public key address of the given ID address
+	// StateAccountKey returns the public key address of the given ID address for secp and bls accounts
 	StateAccountKey(context.Context, address.Address, types.TipSetKey) (address.Address, error) //perm:read
+	// StateLookupRobustAddress returns the public key address of the given ID address for non-account addresses (multisig, miners etc)
+	StateLookupRobustAddress(context.Context, address.Address, types.TipSetKey) (address.Address, error) //perm:read
 	// StateChangedActors returns all the actors whose states change between the two given state CIDs
 	// TODO: Should this take tipset keys instead?
 	StateChangedActors(context.Context, cid.Cid, cid.Cid) (map[string]types.Actor, error) //perm:read
 	// StateMinerSectorCount returns the number of sectors in a miner's sector set and proving set
 	StateMinerSectorCount(context.Context, address.Address, types.TipSetKey) (MinerSectors, error) //perm:read
+	// StateMinerAllocated returns a bitfield containing all sector numbers marked as allocated in miner state
+	StateMinerAllocated(context.Context, address.Address, types.TipSetKey) (*bitfield.BitField, error) //perm:read
 	// StateCompute is a flexible command that applies the given messages on the given tipset.
 	// The messages are run as though the VM were at the provided height.
 	//
@@ -571,7 +596,7 @@ type FullNode interface {
 	// Returns nil if there is no entry in the data cap table for the
 	// address.
 	StateVerifiedClientStatus(ctx context.Context, addr address.Address, tsk types.TipSetKey) (*abi.StoragePower, error) //perm:read
-	// StateVerifiedClientStatus returns the address of the Verified Registry's root key
+	// StateVerifiedRegistryRootKey returns the address of the Verified Registry's root key
 	StateVerifiedRegistryRootKey(ctx context.Context, tsk types.TipSetKey) (address.Address, error) //perm:read
 	// StateDealProviderCollateralBounds returns the min and max collateral a storage provider
 	// can issue. It takes the deal size and verified status as parameters.
@@ -585,11 +610,23 @@ type FullNode interface {
 	StateVMCirculatingSupplyInternal(context.Context, types.TipSetKey) (CirculatingSupply, error) //perm:read
 	// StateNetworkVersion returns the network version at the given tipset
 	StateNetworkVersion(context.Context, types.TipSetKey) (apitypes.NetworkVersion, error) //perm:read
+	// StateActorCodeCIDs returns the CIDs of all the builtin actors for the given network version
+	StateActorCodeCIDs(context.Context, abinetwork.Version) (map[string]cid.Cid, error) //perm:read
+	// StateActorManifestCID returns the CID of the builtin actors manifest for the given network version
+	StateActorManifestCID(context.Context, abinetwork.Version) (cid.Cid, error) //perm:read
 
 	// StateGetRandomnessFromTickets is used to sample the chain for randomness.
 	StateGetRandomnessFromTickets(ctx context.Context, personalization crypto.DomainSeparationTag, randEpoch abi.ChainEpoch, entropy []byte, tsk types.TipSetKey) (abi.Randomness, error) //perm:read
 	// StateGetRandomnessFromBeacon is used to sample the beacon for randomness.
 	StateGetRandomnessFromBeacon(ctx context.Context, personalization crypto.DomainSeparationTag, randEpoch abi.ChainEpoch, entropy []byte, tsk types.TipSetKey) (abi.Randomness, error) //perm:read
+
+	// StateGetBeaconEntry returns the beacon entry for the given filecoin epoch. If
+	// the entry has not yet been produced, the call will block until the entry
+	// becomes available
+	StateGetBeaconEntry(ctx context.Context, epoch abi.ChainEpoch) (*types.BeaconEntry, error) //perm:read
+
+	// StateGetNetworkParams return current network params
+	StateGetNetworkParams(ctx context.Context) (*NetworkParams, error) //perm:read
 
 	// MethodGroup: Msig
 	// The Msig methods are used to interact with multisig wallets on the
@@ -631,9 +668,13 @@ type FullNode interface {
 	MsigApproveTxnHash(context.Context, address.Address, uint64, address.Address, address.Address, types.BigInt, address.Address, uint64, []byte) (*MessagePrototype, error) //perm:sign
 
 	// MsigCancel cancels a previously-proposed multisig message
+	// It takes the following params: <multisig address>, <proposed transaction ID> <signer address>
+	MsigCancel(context.Context, address.Address, uint64, address.Address) (*MessagePrototype, error) //perm:sign
+
+	// MsigCancel cancels a previously-proposed multisig message
 	// It takes the following params: <multisig address>, <proposed transaction ID>, <recipient address>, <value to transfer>,
 	// <sender address of the cancel msg>, <method to call in the proposed message>, <params to include in the proposed message>
-	MsigCancel(context.Context, address.Address, uint64, address.Address, types.BigInt, address.Address, uint64, []byte) (*MessagePrototype, error) //perm:sign
+	MsigCancelTxnHash(context.Context, address.Address, uint64, address.Address, types.BigInt, address.Address, uint64, []byte) (*MessagePrototype, error) //perm:sign
 
 	// MsigAddPropose proposes adding a signer in the multisig
 	// It takes the following params: <multisig address>, <sender address of the propose msg>,
@@ -686,7 +727,17 @@ type FullNode interface {
 	// MethodGroup: Paych
 	// The Paych methods are for interacting with and managing payment channels
 
-	PaychGet(ctx context.Context, from, to address.Address, amt types.BigInt) (*ChannelInfo, error)                     //perm:sign
+	// PaychGet gets or creates a payment channel between address pair
+	//  The specified amount will be reserved for use. If there aren't enough non-reserved funds
+	//    available, funds will be added through an on-chain message.
+	//  - When opts.OffChain is true, this call will not cause any messages to be sent to the chain (no automatic
+	//    channel creation/funds adding). If the operation can't be performed without sending a message an error will be
+	//    returned. Note that even when this option is specified, this call can be blocked by previous operations on the
+	//    channel waiting for on-chain operations.
+	PaychGet(ctx context.Context, from, to address.Address, amt types.BigInt, opts PaychGetOpts) (*ChannelInfo, error) //perm:sign
+	// PaychFund gets or creates a payment channel between address pair.
+	// The specified amount will be added to the channel through on-chain send for future use
+	PaychFund(ctx context.Context, from, to address.Address, amt types.BigInt) (*ChannelInfo, error)                    //perm:sign
 	PaychGetWaitReady(context.Context, cid.Cid) (address.Address, error)                                                //perm:sign
 	PaychAvailableFunds(ctx context.Context, ch address.Address) (*ChannelAvailableFunds, error)                        //perm:sign
 	PaychAvailableFundsByFromTo(ctx context.Context, from, to address.Address) (*ChannelAvailableFunds, error)          //perm:sign
@@ -713,6 +764,12 @@ type FullNode interface {
 	// LOTUS_BACKUP_BASE_PATH environment variable set to some path, and that
 	// the path specified when calling CreateBackup is within the base path
 	CreateBackup(ctx context.Context, fpath string) error //perm:admin
+}
+
+type StorageAsk struct {
+	Response *storagemarket.StorageAsk
+
+	DealProtocols []string
 }
 
 type FileRef struct {
@@ -825,6 +882,10 @@ const (
 	PCHOutbound
 )
 
+type PaychGetOpts struct {
+	OffChain bool
+}
+
 type PaychStatus struct {
 	ControlAddr address.Address
 	Direction   PCHDir
@@ -842,16 +903,23 @@ type ChannelAvailableFunds struct {
 	From address.Address
 	// To is the to address of the channel
 	To address.Address
-	// ConfirmedAmt is the amount of funds that have been confirmed on-chain
-	// for the channel
+
+	// ConfirmedAmt is the total amount of funds that have been confirmed on-chain for the channel
 	ConfirmedAmt types.BigInt
 	// PendingAmt is the amount of funds that are pending confirmation on-chain
 	PendingAmt types.BigInt
+
+	// NonReservedAmt is part of ConfirmedAmt that is available for use (e.g. when the payment channel was pre-funded)
+	NonReservedAmt types.BigInt
+	// PendingAvailableAmt is the amount of funds that are pending confirmation on-chain that will become available once confirmed
+	PendingAvailableAmt types.BigInt
+
 	// PendingWaitSentinel can be used with PaychGetWaitReady to wait for
 	// confirmation of pending funds
 	PendingWaitSentinel *cid.Cid
 	// QueuedAmt is the amount that is queued up behind a pending request
 	QueuedAmt types.BigInt
+
 	// VoucherRedeemedAmt is the amount that is redeemed by vouchers on-chain
 	// and in the local datastore
 	VoucherReedeemedAmt types.BigInt
@@ -897,6 +965,7 @@ type QueryOffer struct {
 	Size                    uint64
 	MinPrice                types.BigInt
 	UnsealPrice             types.BigInt
+	PricePerByte            abi.TokenAmount
 	PaymentInterval         uint64
 	PaymentIntervalIncrease uint64
 	Miner                   address.Address
@@ -930,22 +999,25 @@ type MarketDeal struct {
 }
 
 type RetrievalOrder struct {
-	// TODO: make this less unixfs specific
-	Root                  cid.Cid
-	Piece                 *cid.Cid
-	DatamodelPathSelector *textselector.Expression
-	Size                  uint64
+	Root         cid.Cid
+	Piece        *cid.Cid
+	DataSelector *Selector
 
-	FromLocalCAR string // if specified, get data from a local CARv2 file.
-	// TODO: support offset
-	Total                   types.BigInt
+	// todo: Size/Total are only used for calculating price per byte; we should let users just pass that
+	Size  uint64
+	Total types.BigInt
+
 	UnsealPrice             types.BigInt
 	PaymentInterval         uint64
 	PaymentIntervalIncrease uint64
 	Client                  address.Address
 	Miner                   address.Address
 	MinerPeer               *retrievalmarket.RetrievalPeer
+
+	RemoteStore *RemoteStoreID `json:"RemoteStore,omitempty"`
 }
+
+type RemoteStoreID = uuid.UUID
 
 type InvocResult struct {
 	MsgCid         cid.Cid
@@ -1081,7 +1153,7 @@ type CirculatingSupply struct {
 type MiningBaseInfo struct {
 	MinerPower        types.BigInt
 	NetworkPower      types.BigInt
-	Sectors           []builtin.SectorInfo
+	Sectors           []builtin.ExtendedSectorInfo
 	WorkerKey         address.Address
 	SectorSize        abi.SectorSize
 	PrevBeaconEntry   types.BeaconEntry
@@ -1171,4 +1243,9 @@ type MsigTransaction struct {
 	Params []byte
 
 	Approved []address.Address
+}
+
+type PruneOpts struct {
+	MovingGC    bool
+	RetainState int64
 }

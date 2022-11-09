@@ -12,12 +12,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	lcli "github.com/urfave/cli/v2"
+
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/stretchr/testify/require"
-	lcli "github.com/urfave/cli/v2"
 )
 
 // RunClientTest exercises some of the Client CLI commands
@@ -101,14 +103,25 @@ func RunClientTest(t *testing.T, cmds []*lcli.Command, clientNode *TestFullNode)
 		time.Sleep(time.Second)
 	}
 
+	// client retrieval-ask --size=1 <miner addr> <data CID>
+	out = clientCLI.RunCmd("client", "retrieval-ask", "--size=1", minerAddr.String(), dataCid.String())
+	require.Regexp(t, regexp.MustCompile("Ask:"), out)
+	fmt.Println("retrieval ask:\n", out)
+
 	// Retrieve the first file from the Miner
 	// client retrieve <cid> <file path>
-	tmpdir, err := ioutil.TempDir(os.TempDir(), "test-cli-Client")
+	tmpdir, err := ioutil.TempDir(os.TempDir(), "test-cli-client")
 	require.NoError(t, err)
 	path := filepath.Join(tmpdir, "outfile.dat")
-	out = clientCLI.RunCmd("client", "retrieve", dataCid.String(), path)
-	fmt.Println("retrieve:\n", out)
-	require.Regexp(t, regexp.MustCompile("Success"), out)
+
+	// Wait for client retrieve to succeed.
+	for {
+		out = clientCLI.RunCmd("client", "retrieve", dataCid.String(), path)
+		fmt.Println("retrieve:\n", out)
+		if strings.Contains(out, "Success") {
+			break
+		}
+	}
 }
 
 func CreateImportFile(ctx context.Context, client api.FullNode, rseed int, size int) (res *api.ImportRes, path string, data []byte, err error) {

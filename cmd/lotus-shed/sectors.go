@@ -2,29 +2,32 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"os"
 	"sort"
 	"strconv"
 	"sync"
 
+	"github.com/ipfs/go-cid"
+	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/ipfs/go-cid"
-	"github.com/urfave/cli/v2"
-
+	"github.com/filecoin-project/go-state-types/builtin"
 	miner2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 
+	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/parmap"
@@ -38,6 +41,7 @@ var sectorsCmd = &cli.Command{
 		terminateSectorCmd,
 		terminateSectorPenaltyEstimationCmd,
 		visAllocatedSectorsCmd,
+		dumpRLESectorCmd,
 	},
 }
 
@@ -54,10 +58,14 @@ var terminateSectorCmd = &cli.Command{
 			Name:  "really-do-it",
 			Usage: "pass this flag if you know what you are doing",
 		},
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "specify the address to send the terminate message from",
+		},
 	},
 	Action: func(cctx *cli.Context) error {
-		if cctx.Args().Len() < 1 {
-			return fmt.Errorf("at least one sector must be specified")
+		if cctx.NArg() < 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("at least one sector must be specified"))
 		}
 
 		var maddr address.Address
@@ -82,13 +90,13 @@ var terminateSectorCmd = &cli.Command{
 		ctx := lcli.ReqContext(cctx)
 
 		if maddr.Empty() {
-			api, acloser, err := lcli.GetStorageMinerAPI(cctx)
+			minerApi, acloser, err := lcli.GetStorageMinerAPI(cctx)
 			if err != nil {
 				return err
 			}
 			defer acloser()
 
-			maddr, err = api.ActorAddress(ctx)
+			maddr, err = minerApi.ActorAddress(ctx)
 			if err != nil {
 				return err
 			}
@@ -133,10 +141,21 @@ var terminateSectorCmd = &cli.Command{
 			return xerrors.Errorf("serializing params: %w", err)
 		}
 
+		var fromAddr address.Address
+		if from := cctx.String("from"); from != "" {
+			var err error
+			fromAddr, err = address.NewFromString(from)
+			if err != nil {
+				return fmt.Errorf("parsing address %s: %w", from, err)
+			}
+		} else {
+			fromAddr = mi.Worker
+		}
+
 		smsg, err := nodeApi.MpoolPushMessage(ctx, &types.Message{
-			From:   mi.Owner,
+			From:   fromAddr,
 			To:     maddr,
-			Method: miner.Methods.TerminateSectors,
+			Method: builtin.MethodsMiner.TerminateSectors,
 
 			Value:  big.Zero(),
 			Params: sp,
@@ -152,7 +171,7 @@ var terminateSectorCmd = &cli.Command{
 			return err
 		}
 
-		if wait.Receipt.ExitCode != 0 {
+		if wait.Receipt.ExitCode.IsError() {
 			return fmt.Errorf("terminate sectors message returned exit %d", wait.Receipt.ExitCode)
 		}
 
@@ -181,8 +200,8 @@ var terminateSectorPenaltyEstimationCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		if cctx.Args().Len() < 1 {
-			return fmt.Errorf("at least one sector must be specified")
+		if cctx.NArg() < 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("at least one sector must be specified"))
 		}
 
 		var maddr address.Address
@@ -203,13 +222,13 @@ var terminateSectorPenaltyEstimationCmd = &cli.Command{
 		ctx := lcli.ReqContext(cctx)
 
 		if maddr.Empty() {
-			api, acloser, err := lcli.GetStorageMinerAPI(cctx)
+			minerApi, acloser, err := lcli.GetStorageMinerAPI(cctx)
 			if err != nil {
 				return err
 			}
 			defer acloser()
 
-			maddr, err = api.ActorAddress(ctx)
+			maddr, err = minerApi.ActorAddress(ctx)
 			if err != nil {
 				return err
 			}
@@ -257,7 +276,7 @@ var terminateSectorPenaltyEstimationCmd = &cli.Command{
 		msg := &types.Message{
 			From:   mi.Owner,
 			To:     maddr,
-			Method: miner.Methods.TerminateSectors,
+			Method: builtin.MethodsMiner.TerminateSectors,
 
 			Value:  big.Zero(),
 			Params: sp,
@@ -275,6 +294,113 @@ var terminateSectorPenaltyEstimationCmd = &cli.Command{
 	},
 }
 
+func activeMiners(ctx context.Context, api v0api.FullNode) ([]address.Address, error) {
+	miners, err := api.StateListMiners(ctx, types.EmptyTSK)
+	if err != nil {
+		return nil, err
+	}
+	powCache := make(map[address.Address]types.BigInt)
+	var lk sync.Mutex
+	parmap.Par(32, miners, func(a address.Address) {
+		pow, err := api.StateMinerPower(ctx, a, types.EmptyTSK)
+
+		lk.Lock()
+		if err == nil {
+			powCache[a] = pow.MinerPower.QualityAdjPower
+		} else {
+			powCache[a] = types.NewInt(0)
+		}
+		lk.Unlock()
+	})
+	sort.Slice(miners, func(i, j int) bool {
+		return powCache[miners[i]].GreaterThan(powCache[miners[j]])
+	})
+	n := sort.Search(len(miners), func(i int) bool {
+		pow := powCache[miners[i]]
+		return pow.IsZero()
+	})
+	return append(miners[0:0:0], miners[:n]...), nil
+}
+
+var dumpRLESectorCmd = &cli.Command{
+	Name:  "dump-rles",
+	Usage: "Dump AllocatedSectors RLEs from miners passed as arguments as run lengths in uint64 LE format.\nIf no arguments are passed, dumps all active miners in the state tree.",
+	Action: func(cctx *cli.Context) error {
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := lcli.ReqContext(cctx)
+		var miners []address.Address
+		if cctx.NArg() == 0 {
+			miners, err = activeMiners(ctx, api)
+			if err != nil {
+				return xerrors.Errorf("getting active miners: %w", err)
+			}
+		} else {
+			for _, mS := range cctx.Args().Slice() {
+				mA, err := address.NewFromString(mS)
+				if err != nil {
+					return xerrors.Errorf("parsing address '%s': %w", mS, err)
+				}
+				miners = append(miners, mA)
+			}
+		}
+		wbuf := make([]byte, 8)
+		buf := &bytes.Buffer{}
+
+		for i := 0; i < len(miners); i++ {
+			buf.Reset()
+			err := func() error {
+				state, err := api.StateReadState(ctx, miners[i], types.EmptyTSK)
+				if err != nil {
+					return xerrors.Errorf("getting state: %+v", err)
+				}
+				allocSString := state.State.(map[string]interface{})["AllocatedSectors"].(map[string]interface{})["/"].(string)
+
+				allocCid, err := cid.Decode(allocSString)
+				if err != nil {
+					return xerrors.Errorf("decoding cid: %+v", err)
+				}
+				rle, err := api.ChainReadObj(ctx, allocCid)
+				if err != nil {
+					return xerrors.Errorf("reading AllocatedSectors: %+v", err)
+				}
+
+				var bf bitfield.BitField
+				err = bf.UnmarshalCBOR(bytes.NewReader(rle))
+				if err != nil {
+					return xerrors.Errorf("decoding bitfield: %w", err)
+				}
+				ri, err := bf.RunIterator()
+				if err != nil {
+					return xerrors.Errorf("creating iterator: %w", err)
+				}
+
+				for ri.HasNext() {
+					run, err := ri.NextRun()
+					if err != nil {
+						return xerrors.Errorf("getting run: %w", err)
+					}
+					binary.LittleEndian.PutUint64(wbuf, run.Len)
+					buf.Write(wbuf)
+				}
+				_, err = io.Copy(os.Stdout, buf)
+				if err != nil {
+					return xerrors.Errorf("copy: %w", err)
+				}
+
+				return nil
+			}()
+			if err != nil {
+				log.Errorf("miner %d: %s: %+v", i, miners[i], err)
+			}
+		}
+		return nil
+	},
+}
+
 var visAllocatedSectorsCmd = &cli.Command{
 	Name:  "vis-allocated",
 	Usage: "Produces a html with visualisation of allocated sectors",
@@ -287,32 +413,10 @@ var visAllocatedSectorsCmd = &cli.Command{
 		ctx := lcli.ReqContext(cctx)
 		var miners []address.Address
 		if cctx.NArg() == 0 {
-			miners, err = api.StateListMiners(ctx, types.EmptyTSK)
+			miners, err = activeMiners(ctx, api)
 			if err != nil {
-				return err
+				return xerrors.Errorf("getting active miners: %w", err)
 			}
-			powCache := make(map[address.Address]types.BigInt)
-			var lk sync.Mutex
-			parmap.Par(32, miners, func(a address.Address) {
-				pow, err := api.StateMinerPower(ctx, a, types.EmptyTSK)
-
-				lk.Lock()
-				if err == nil {
-					powCache[a] = pow.MinerPower.QualityAdjPower
-				} else {
-					powCache[a] = types.NewInt(0)
-				}
-				lk.Unlock()
-			})
-			sort.Slice(miners, func(i, j int) bool {
-				return powCache[miners[i]].GreaterThan(powCache[miners[j]])
-			})
-			n := sort.Search(len(miners), func(i int) bool {
-				pow := powCache[miners[i]]
-				log.Infof("pow @%d = %s", i, pow)
-				return pow.IsZero()
-			})
-			miners = miners[:n]
 		} else {
 			for _, mS := range cctx.Args().Slice() {
 				mA, err := address.NewFromString(mS)

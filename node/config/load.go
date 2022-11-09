@@ -33,7 +33,7 @@ func FromFile(path string, def interface{}) (interface{}, error) {
 // FromReader loads config from a reader instance.
 func FromReader(reader io.Reader, def interface{}) (interface{}, error) {
 	cfg := def
-	_, err := toml.DecodeReader(reader, cfg)
+	_, err := toml.NewDecoder(reader).Decode(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func ConfigUpdate(cfgCur, cfgDef interface{}, comment bool) ([]byte, error) {
 	}
 
 	if comment {
-		// create a map of default lines so we can comment those out later
+		// create a map of default lines, so we can comment those out later
 		defLines := strings.Split(defStr, "\n")
 		defaults := map[string]struct{}{}
 		for i := range defLines {

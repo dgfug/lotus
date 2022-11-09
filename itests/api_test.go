@@ -1,3 +1,4 @@
+// stm: #integration
 package itests
 
 import (
@@ -6,19 +7,28 @@ import (
 	"testing"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	"github.com/stretchr/testify/require"
 
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/itests/kit"
-	logging "github.com/ipfs/go-log/v2"
 )
 
 func TestAPI(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
+
+	//stm: @CHAIN_STATE_MINER_INFO_001
 	t.Run("direct", func(t *testing.T) {
 		runAPITest(t)
 	})
@@ -42,6 +52,8 @@ func runAPITest(t *testing.T, opts ...interface{}) {
 	t.Run("testMiningReal", ts.testMiningReal)
 	t.Run("testSlowNotify", ts.testSlowNotify)
 	t.Run("testSearchMsg", ts.testSearchMsg)
+	t.Run("testOutOfGasError", ts.testOutOfGasError)
+	t.Run("testLookupNotFoundError", ts.testLookupNotFoundError)
 	t.Run("testNonGenesisMiner", ts.testNonGenesisMiner)
 }
 
@@ -90,11 +102,21 @@ func (ts *apiSuite) testConnectTwo(t *testing.T) {
 
 	peers, err := one.NetPeers(ctx)
 	require.NoError(t, err)
-	require.Lenf(t, peers, 2, "node one doesn't have 2 peers")
+
+	countPeerIDs := func(peers []peer.AddrInfo) int {
+		peerIDs := make(map[peer.ID]struct{})
+		for _, p := range peers {
+			peerIDs[p.ID] = struct{}{}
+		}
+
+		return len(peerIDs)
+	}
+
+	require.Equal(t, countPeerIDs(peers), 2, "node one doesn't have 2 peers")
 
 	peers, err = two.NetPeers(ctx)
 	require.NoError(t, err)
-	require.Lenf(t, peers, 2, "node two doesn't have 2 peers")
+	require.Equal(t, countPeerIDs(peers), 2, "node one doesn't have 2 peers")
 }
 
 func (ts *apiSuite) testSearchMsg(t *testing.T) {
@@ -116,16 +138,58 @@ func (ts *apiSuite) testSearchMsg(t *testing.T) {
 	sm, err := full.MpoolPushMessage(ctx, msg, nil)
 	require.NoError(t, err)
 
+	//stm: @CHAIN_STATE_WAIT_MSG_001
 	res, err := full.StateWaitMsg(ctx, sm.Cid(), 1, lapi.LookbackNoLimit, true)
 	require.NoError(t, err)
 
 	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "message not successful")
 
+	//stm: @CHAIN_STATE_SEARCH_MSG_001
 	searchRes, err := full.StateSearchMsg(ctx, types.EmptyTSK, sm.Cid(), lapi.LookbackNoLimit, true)
 	require.NoError(t, err)
 	require.NotNil(t, searchRes)
 
 	require.Equalf(t, res.TipSet, searchRes.TipSet, "search ts: %s, different from wait ts: %s", searchRes.TipSet, res.TipSet)
+}
+
+func (ts *apiSuite) testOutOfGasError(t *testing.T) {
+	ctx := context.Background()
+
+	full, _, _ := kit.EnsembleMinimal(t, ts.opts...)
+
+	senderAddr, err := full.WalletDefaultAddress(ctx)
+	require.NoError(t, err)
+
+	// the gas estimator API executes the message with gasLimit = BlockGasLimit
+	// Lowering it to 2 will cause it to run out of gas, testing the failure case we want
+	originalLimit := build.BlockGasLimit
+	build.BlockGasLimit = 2
+	defer func() {
+		build.BlockGasLimit = originalLimit
+	}()
+
+	msg := &types.Message{
+		From:  senderAddr,
+		To:    senderAddr,
+		Value: big.Zero(),
+	}
+
+	_, err = full.GasEstimateMessageGas(ctx, msg, nil, types.EmptyTSK)
+	require.Error(t, err, "should have failed")
+	require.True(t, xerrors.Is(err, &lapi.ErrOutOfGas{}))
+}
+
+func (ts *apiSuite) testLookupNotFoundError(t *testing.T) {
+	ctx := context.Background()
+
+	full, _, _ := kit.EnsembleMinimal(t, ts.opts...)
+
+	addr, err := full.WalletNew(ctx, types.KTSecp256k1)
+	require.NoError(t, err)
+
+	_, err = full.StateLookupID(ctx, addr, types.EmptyTSK)
+	require.Error(t, err)
+	require.True(t, xerrors.Is(err, &lapi.ErrActorNotFound{}))
 }
 
 func (ts *apiSuite) testMining(t *testing.T) {

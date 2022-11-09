@@ -3,14 +3,15 @@ package api
 import (
 	"context"
 
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/builtin/v9/miner"
 	"github.com/filecoin-project/go-state-types/dline"
 
 	apitypes "github.com/filecoin-project/lotus/api/types"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -30,7 +31,10 @@ import (
 
 type Gateway interface {
 	ChainHasObj(context.Context, cid.Cid) (bool, error)
+	ChainPutObj(context.Context, blocks.Block) error
 	ChainHead(ctx context.Context) (*types.TipSet, error)
+	ChainGetParentMessages(context.Context, cid.Cid) ([]Message, error)
+	ChainGetParentReceipts(context.Context, cid.Cid) ([]*types.MessageReceipt, error)
 	ChainGetBlockMessages(context.Context, cid.Cid) (*BlockMessages, error)
 	ChainGetMessage(ctx context.Context, mc cid.Cid) (*types.Message, error)
 	ChainGetPath(ctx context.Context, from, to types.TipSetKey) ([]*HeadChange, error)
@@ -39,11 +43,13 @@ type Gateway interface {
 	ChainGetTipSetAfterHeight(ctx context.Context, h abi.ChainEpoch, tsk types.TipSetKey) (*types.TipSet, error)
 	ChainNotify(context.Context) (<-chan []*HeadChange, error)
 	ChainReadObj(context.Context, cid.Cid) ([]byte, error)
+	ChainGetGenesis(context.Context) (*types.TipSet, error)
 	GasEstimateMessageGas(ctx context.Context, msg *types.Message, spec *MessageSendSpec, tsk types.TipSetKey) (*types.Message, error)
 	MpoolPush(ctx context.Context, sm *types.SignedMessage) (cid.Cid, error)
 	MsigGetAvailableBalance(ctx context.Context, addr address.Address, tsk types.TipSetKey) (types.BigInt, error)
-	MsigGetVested(ctx context.Context, addr address.Address, start types.TipSetKey, end types.TipSetKey) (types.BigInt, error)
 	MsigGetPending(context.Context, address.Address, types.TipSetKey) ([]*MsigTransaction, error)
+	MsigGetVested(ctx context.Context, addr address.Address, start types.TipSetKey, end types.TipSetKey) (types.BigInt, error)
+	MsigGetVestingSchedule(ctx context.Context, addr address.Address, tsk types.TipSetKey) (MsigVesting, error)
 	StateAccountKey(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error)
 	StateDealProviderCollateralBounds(ctx context.Context, size abi.PaddedPieceSize, verified bool, tsk types.TipSetKey) (DealCollateralBounds, error)
 	StateGetActor(ctx context.Context, actor address.Address, ts types.TipSetKey) (*types.Actor, error)
@@ -52,7 +58,7 @@ type Gateway interface {
 	StateLookupID(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error)
 	StateMarketBalance(ctx context.Context, addr address.Address, tsk types.TipSetKey) (MarketBalance, error)
 	StateMarketStorageDeal(ctx context.Context, dealId abi.DealID, tsk types.TipSetKey) (*MarketDeal, error)
-	StateMinerInfo(ctx context.Context, actor address.Address, tsk types.TipSetKey) (miner.MinerInfo, error)
+	StateMinerInfo(ctx context.Context, actor address.Address, tsk types.TipSetKey) (MinerInfo, error)
 	StateMinerProvingDeadline(ctx context.Context, addr address.Address, tsk types.TipSetKey) (*dline.Info, error)
 	StateMinerPower(context.Context, address.Address, types.TipSetKey) (*MinerPower, error)
 	StateNetworkVersion(context.Context, types.TipSetKey) (apitypes.NetworkVersion, error)
@@ -62,4 +68,5 @@ type Gateway interface {
 	StateWaitMsg(ctx context.Context, cid cid.Cid, confidence uint64, limit abi.ChainEpoch, allowReplaced bool) (*MsgLookup, error)
 	WalletBalance(context.Context, address.Address) (types.BigInt, error)
 	Version(context.Context) (APIVersion, error)
+	Discover(context.Context) (apitypes.OpenRPCDocument, error)
 }

@@ -1,3 +1,4 @@
+// stm: #unit
 package state
 
 import (
@@ -5,12 +6,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/filecoin-project/go-state-types/network"
-
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 
-	address "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/network"
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 
 	"github.com/filecoin-project/lotus/build"
@@ -18,6 +18,7 @@ import (
 )
 
 func BenchmarkStateTreeSet(b *testing.B) {
+	//stm: @CHAIN_STATETREE_SET_ACTOR_001
 	cst := cbor.NewMemCborStore()
 	st, err := NewStateTree(cst, types.StateTreeVersion1)
 	if err != nil {
@@ -45,8 +46,9 @@ func BenchmarkStateTreeSet(b *testing.B) {
 }
 
 func BenchmarkStateTreeSetFlush(b *testing.B) {
+	//stm: @CHAIN_STATETREE_SET_ACTOR_001
 	cst := cbor.NewMemCborStore()
-	sv, err := VersionForNetwork(build.NewestNetworkVersion)
+	sv, err := VersionForNetwork(build.TestNetworkVersion)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -80,8 +82,10 @@ func BenchmarkStateTreeSetFlush(b *testing.B) {
 }
 
 func TestResolveCache(t *testing.T) {
+	//stm: @CHAIN_STATETREE_SET_ACTOR_001, @CHAIN_STATETREE_GET_ACTOR_001, @CHAIN_STATETREE_VERSION_FOR_NETWORK_001
+	//stm: @CHAIN_STATETREE_SNAPSHOT_001, @CHAIN_STATETREE_SNAPSHOT_CLEAR_001
 	cst := cbor.NewMemCborStore()
-	sv, err := VersionForNetwork(build.NewestNetworkVersion)
+	sv, err := VersionForNetwork(build.TestNetworkVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,8 +186,10 @@ func TestResolveCache(t *testing.T) {
 }
 
 func BenchmarkStateTree10kGetActor(b *testing.B) {
+	//stm: @CHAIN_STATETREE_SET_ACTOR_001, @CHAIN_STATETREE_GET_ACTOR_001, @CHAIN_STATETREE_VERSION_FOR_NETWORK_001
+	//stm: @CHAIN_STATETREE_FLUSH_001
 	cst := cbor.NewMemCborStore()
-	sv, err := VersionForNetwork(build.NewestNetworkVersion)
+	sv, err := VersionForNetwork(build.TestNetworkVersion)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -229,8 +235,9 @@ func BenchmarkStateTree10kGetActor(b *testing.B) {
 }
 
 func TestSetCache(t *testing.T) {
+	//stm: @CHAIN_STATETREE_SET_ACTOR_001, @CHAIN_STATETREE_GET_ACTOR_001, @CHAIN_STATETREE_VERSION_FOR_NETWORK_001
 	cst := cbor.NewMemCborStore()
-	sv, err := VersionForNetwork(build.NewestNetworkVersion)
+	sv, err := VersionForNetwork(build.TestNetworkVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,10 +277,12 @@ func TestSetCache(t *testing.T) {
 }
 
 func TestSnapshots(t *testing.T) {
+	//stm: @CHAIN_STATETREE_SET_ACTOR_001, @CHAIN_STATETREE_GET_ACTOR_001, @CHAIN_STATETREE_VERSION_FOR_NETWORK_001
+	//stm: @CHAIN_STATETREE_FLUSH_001, @CHAIN_STATETREE_SNAPSHOT_REVERT_001, CHAIN_STATETREE_SNAPSHOT_CLEAR_001
 	ctx := context.Background()
 	cst := cbor.NewMemCborStore()
 
-	sv, err := VersionForNetwork(build.NewestNetworkVersion)
+	sv, err := VersionForNetwork(build.TestNetworkVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,6 +369,7 @@ func assertNotHas(t *testing.T, st *StateTree, addr address.Address) {
 }
 
 func TestStateTreeConsistency(t *testing.T) {
+	//stm: @CHAIN_STATETREE_SET_ACTOR_001, @CHAIN_STATETREE_VERSION_FOR_NETWORK_001, @CHAIN_STATETREE_FLUSH_001
 	cst := cbor.NewMemCborStore()
 
 	// TODO: ActorUpgrade: this test tests pre actors v2

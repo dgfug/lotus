@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
-
 	"github.com/ipfs/go-datastore"
 	fslock "github.com/ipfs/go-fs-lock"
 	logging "github.com/ipfs/go-log/v2"
@@ -24,11 +23,10 @@ import (
 
 	"github.com/filecoin-project/lotus/blockstore"
 	badgerbs "github.com/filecoin-project/lotus/blockstore/badger"
-	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
-	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
-
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/config"
+	"github.com/filecoin-project/lotus/storage/sealer/fsutil"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 const (
@@ -41,47 +39,174 @@ const (
 	fsKeystore      = "keystore"
 )
 
-type RepoType int
-
-const (
-	_                 = iota // Default is invalid
-	FullNode RepoType = iota
-	StorageMiner
-	Worker
-	Wallet
-	Markets
-)
-
-func (t RepoType) String() string {
-	s := [...]string{
-		"__invalid__",
-		"FullNode",
-		"StorageMiner",
-		"Worker",
-		"Wallet",
-		"Markets",
+func NewRepoTypeFromString(t string) RepoType {
+	switch t {
+	case "FullNode":
+		return FullNode
+	case "StorageMiner":
+		return StorageMiner
+	case "Worker":
+		return Worker
+	case "Wallet":
+		return Wallet
+	default:
+		panic("unknown RepoType")
 	}
-	if t < 0 || int(t) > len(s) {
-		return "__invalid__"
-	}
-	return s[t]
 }
 
-func defConfForType(t RepoType) interface{} {
-	switch t {
-	case FullNode:
-		return config.DefaultFullNode()
-	case StorageMiner, Markets:
-		// markets is a specialised miner service
-		// this taxonomy needs to be cleaned up
-		return config.DefaultStorageMiner()
-	case Worker:
-		return &struct{}{}
-	case Wallet:
-		return &struct{}{}
-	default:
-		panic(fmt.Sprintf("unknown RepoType(%d)", int(t)))
-	}
+type RepoType interface {
+	Type() string
+	Config() interface{}
+
+	// APIFlags returns flags passed on the command line with the listen address
+	// of the API server (only used by the tests), in the order of precedence they
+	// should be applied for the requested kind of node.
+	APIFlags() []string
+
+	RepoFlags() []string
+
+	// APIInfoEnvVars returns the environment variables to use in order of precedence
+	// to determine the API endpoint of the specified node type.
+	//
+	// It returns the current variables and deprecated ones separately, so that
+	// the user can log a warning when deprecated ones are found to be in use.
+	APIInfoEnvVars() (string, []string, []string)
+}
+
+// SupportsStagingDeals is a trait for services that support staging deals
+type SupportsStagingDeals interface {
+	SupportsStagingDeals()
+}
+
+var FullNode fullNode
+
+type fullNode struct {
+}
+
+func (fullNode) Type() string {
+	return "FullNode"
+}
+
+func (fullNode) Config() interface{} {
+	return config.DefaultFullNode()
+}
+
+func (fullNode) APIFlags() []string {
+	return []string{"api-url"}
+}
+
+func (fullNode) RepoFlags() []string {
+	return []string{"repo"}
+}
+
+func (fullNode) APIInfoEnvVars() (primary string, fallbacks []string, deprecated []string) {
+	return "FULLNODE_API_INFO", nil, nil
+}
+
+var StorageMiner storageMiner
+
+type storageMiner struct{}
+
+func (storageMiner) SupportsStagingDeals() {}
+
+func (storageMiner) Type() string {
+	return "StorageMiner"
+}
+
+func (storageMiner) Config() interface{} {
+	return config.DefaultStorageMiner()
+}
+
+func (storageMiner) APIFlags() []string {
+	return []string{"miner-api-url"}
+}
+
+func (storageMiner) RepoFlags() []string {
+	return []string{"miner-repo"}
+}
+
+func (storageMiner) APIInfoEnvVars() (primary string, fallbacks []string, deprecated []string) {
+	// TODO remove deprecated deprecation period
+	return "MINER_API_INFO", nil, []string{"STORAGE_API_INFO"}
+}
+
+var Markets markets
+
+type markets struct{}
+
+func (markets) SupportsStagingDeals() {}
+
+func (markets) Type() string {
+	return "Markets"
+}
+
+func (markets) Config() interface{} {
+	return config.DefaultStorageMiner()
+}
+
+func (markets) APIFlags() []string {
+	// support split markets-miner and monolith deployments.
+	return []string{"markets-api-url", "miner-api-url"}
+}
+
+func (markets) RepoFlags() []string {
+	// support split markets-miner and monolith deployments.
+	return []string{"markets-repo", "miner-repo"}
+}
+
+func (markets) APIInfoEnvVars() (primary string, fallbacks []string, deprecated []string) {
+	// support split markets-miner and monolith deployments.
+	return "MARKETS_API_INFO", []string{"MINER_API_INFO"}, nil
+}
+
+type worker struct {
+}
+
+var Worker worker
+
+func (worker) Type() string {
+	return "Worker"
+}
+
+func (worker) Config() interface{} {
+	return &struct{}{}
+}
+
+func (worker) APIFlags() []string {
+	return []string{"worker-api-url"}
+}
+
+func (worker) RepoFlags() []string {
+	return []string{"worker-repo"}
+}
+
+func (worker) APIInfoEnvVars() (primary string, fallbacks []string, deprecated []string) {
+	return "WORKER_API_INFO", nil, nil
+}
+
+var Wallet wallet
+
+type wallet struct {
+}
+
+func (wallet) Type() string {
+	return "Wallet"
+}
+
+func (wallet) Config() interface{} {
+	return &struct{}{}
+}
+
+func (wallet) APIFlags() []string {
+	panic("not supported")
+}
+
+func (wallet) RepoFlags() []string {
+	panic("not supported")
+}
+
+func (wallet) APIInfoEnvVars() (primary string, fallbacks []string, deprecated []string) {
+	panic("not supported")
 }
 
 var log = logging.Logger("repo")
@@ -165,7 +290,7 @@ func (fsr *FsRepo) initConfig(t RepoType) error {
 		return err
 	}
 
-	comm, err := config.ConfigComment(defConfForType(t))
+	comm, err := config.ConfigComment(t.Config())
 	if err != nil {
 		return xerrors.Errorf("comment: %w", err)
 	}
@@ -290,6 +415,10 @@ type fsLockedRepo struct {
 	configLk  sync.Mutex
 }
 
+func (fsr *fsLockedRepo) RepoType() RepoType {
+	return fsr.repoType
+}
+
 func (fsr *fsLockedRepo) Readonly() bool {
 	return fsr.readonly
 }
@@ -406,7 +535,7 @@ func (fsr *fsLockedRepo) Config() (interface{}, error) {
 }
 
 func (fsr *fsLockedRepo) loadConfigFromDisk() (interface{}, error) {
-	return config.FromFile(fsr.configPath, defConfForType(fsr.repoType))
+	return config.FromFile(fsr.configPath, fsr.repoType.Config())
 }
 
 func (fsr *fsLockedRepo) SetConfig(c func(interface{})) error {
@@ -443,26 +572,26 @@ func (fsr *fsLockedRepo) SetConfig(c func(interface{})) error {
 	return nil
 }
 
-func (fsr *fsLockedRepo) GetStorage() (stores.StorageConfig, error) {
+func (fsr *fsLockedRepo) GetStorage() (storiface.StorageConfig, error) {
 	fsr.storageLk.Lock()
 	defer fsr.storageLk.Unlock()
 
 	return fsr.getStorage(nil)
 }
 
-func (fsr *fsLockedRepo) getStorage(def *stores.StorageConfig) (stores.StorageConfig, error) {
+func (fsr *fsLockedRepo) getStorage(def *storiface.StorageConfig) (storiface.StorageConfig, error) {
 	c, err := config.StorageFromFile(fsr.join(fsStorageConfig), def)
 	if err != nil {
-		return stores.StorageConfig{}, err
+		return storiface.StorageConfig{}, err
 	}
 	return *c, nil
 }
 
-func (fsr *fsLockedRepo) SetStorage(c func(*stores.StorageConfig)) error {
+func (fsr *fsLockedRepo) SetStorage(c func(*storiface.StorageConfig)) error {
 	fsr.storageLk.Lock()
 	defer fsr.storageLk.Unlock()
 
-	sc, err := fsr.getStorage(&stores.StorageConfig{})
+	sc, err := fsr.getStorage(&storiface.StorageConfig{})
 	if err != nil {
 		return xerrors.Errorf("get storage: %w", err)
 	}

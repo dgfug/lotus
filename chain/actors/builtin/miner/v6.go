@@ -4,22 +4,20 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-bitfield"
-	rle "github.com/filecoin-project/go-bitfield/rle"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/dline"
 	"github.com/ipfs/go-cid"
-	"github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/lotus/chain/actors/adt"
-
+	"github.com/filecoin-project/go-bitfield"
+	rle "github.com/filecoin-project/go-bitfield/rle"
+	"github.com/filecoin-project/go-state-types/abi"
+	minertypes "github.com/filecoin-project/go-state-types/builtin/v9/miner"
+	"github.com/filecoin-project/go-state-types/dline"
 	builtin6 "github.com/filecoin-project/specs-actors/v6/actors/builtin"
-
 	miner6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/miner"
 	adt6 "github.com/filecoin-project/specs-actors/v6/actors/util/adt"
+
+	"github.com/filecoin-project/lotus/chain/actors/adt"
 )
 
 var _ State = (*state6)(nil)
@@ -138,8 +136,9 @@ func (s *state6) GetSectorExpiration(num abi.SectorNumber) (*SectorExpiration, e
 	// 1. If the sector is non-faulty, it will either expire on-time (can be
 	// learned from the sector info), or in the next quantized expiration
 	// epoch (i.e., the first element in the partition's expiration queue.
-	// 2. If it's faulty, it will expire early within the first 14 entries
+	// 2. If it's faulty, it will expire early within the first 42 entries
 	// of the expiration queue.
+
 	stopErr := errors.New("stop")
 	out := SectorExpiration{}
 	err = dls.ForEach(s.store, func(dlIdx uint64, dl *miner6.Deadline) error {
@@ -196,7 +195,7 @@ func (s *state6) GetSectorExpiration(num abi.SectorNumber) (*SectorExpiration, e
 	return &out, nil
 }
 
-func (s *state6) GetPrecommittedSector(num abi.SectorNumber) (*SectorPreCommitOnChainInfo, error) {
+func (s *state6) GetPrecommittedSector(num abi.SectorNumber) (*minertypes.SectorPreCommitOnChainInfo, error) {
 	info, ok, err := s.State.GetPrecommittedSector(s.store, num)
 	if !ok || err != nil {
 		return nil, err
@@ -207,7 +206,7 @@ func (s *state6) GetPrecommittedSector(num abi.SectorNumber) (*SectorPreCommitOn
 	return &ret, nil
 }
 
-func (s *state6) ForEachPrecommittedSector(cb func(SectorPreCommitOnChainInfo) error) error {
+func (s *state6) ForEachPrecommittedSector(cb func(minertypes.SectorPreCommitOnChainInfo) error) error {
 	precommitted, err := adt6.AsMap(s.store, s.State.PreCommittedSectors, builtin6.DefaultHamtBitwidth)
 	if err != nil {
 		return err
@@ -371,30 +370,19 @@ func (s *state6) Info() (MinerInfo, error) {
 		return MinerInfo{}, err
 	}
 
-	var pid *peer.ID
-	if peerID, err := peer.IDFromBytes(info.PeerId); err == nil {
-		pid = &peerID
-	}
-
 	mi := MinerInfo{
 		Owner:            info.Owner,
 		Worker:           info.Worker,
 		ControlAddresses: info.ControlAddresses,
 
-		NewWorker:         address.Undef,
-		WorkerChangeEpoch: -1,
+		PendingWorkerKey: (*WorkerKeyChange)(info.PendingWorkerKey),
 
-		PeerId:                     pid,
+		PeerId:                     info.PeerId,
 		Multiaddrs:                 info.Multiaddrs,
 		WindowPoStProofType:        info.WindowPoStProofType,
 		SectorSize:                 info.SectorSize,
 		WindowPoStPartitionSectors: info.WindowPoStPartitionSectors,
 		ConsensusFaultElapsed:      info.ConsensusFaultElapsed,
-	}
-
-	if info.PendingWorkerKey != nil {
-		mi.NewWorker = info.PendingWorkerKey.NewWorker
-		mi.WorkerChangeEpoch = info.PendingWorkerKey.EffectiveAt
 	}
 
 	return mi, nil
@@ -426,11 +414,11 @@ func (s *state6) precommits() (adt.Map, error) {
 	return adt6.AsMap(s.store, s.PreCommittedSectors, builtin6.DefaultHamtBitwidth)
 }
 
-func (s *state6) decodeSectorPreCommitOnChainInfo(val *cbg.Deferred) (SectorPreCommitOnChainInfo, error) {
+func (s *state6) decodeSectorPreCommitOnChainInfo(val *cbg.Deferred) (minertypes.SectorPreCommitOnChainInfo, error) {
 	var sp miner6.SectorPreCommitOnChainInfo
 	err := sp.UnmarshalCBOR(bytes.NewReader(val.Raw))
 	if err != nil {
-		return SectorPreCommitOnChainInfo{}, err
+		return minertypes.SectorPreCommitOnChainInfo{}, err
 	}
 
 	return fromV6SectorPreCommitOnChainInfo(sp), nil
@@ -536,8 +524,7 @@ func (p *partition6) UnprovenSectors() (bitfield.BitField, error) {
 }
 
 func fromV6SectorOnChainInfo(v6 miner6.SectorOnChainInfo) SectorOnChainInfo {
-
-	return SectorOnChainInfo{
+	info := SectorOnChainInfo{
 		SectorNumber:          v6.SectorNumber,
 		SealProof:             v6.SealProof,
 		SealedCID:             v6.SealedCID,
@@ -550,19 +537,23 @@ func fromV6SectorOnChainInfo(v6 miner6.SectorOnChainInfo) SectorOnChainInfo {
 		ExpectedDayReward:     v6.ExpectedDayReward,
 		ExpectedStoragePledge: v6.ExpectedStoragePledge,
 	}
-
+	return info
 }
 
-func fromV6SectorPreCommitOnChainInfo(v6 miner6.SectorPreCommitOnChainInfo) SectorPreCommitOnChainInfo {
-
-	return SectorPreCommitOnChainInfo{
-		Info:               (SectorPreCommitInfo)(v6.Info),
-		PreCommitDeposit:   v6.PreCommitDeposit,
-		PreCommitEpoch:     v6.PreCommitEpoch,
-		DealWeight:         v6.DealWeight,
-		VerifiedDealWeight: v6.VerifiedDealWeight,
+func fromV6SectorPreCommitOnChainInfo(v6 miner6.SectorPreCommitOnChainInfo) minertypes.SectorPreCommitOnChainInfo {
+	return minertypes.SectorPreCommitOnChainInfo{
+		Info: minertypes.SectorPreCommitInfo{
+			SealProof:     v6.Info.SealProof,
+			SectorNumber:  v6.Info.SectorNumber,
+			SealedCID:     v6.Info.SealedCID,
+			SealRandEpoch: v6.Info.SealRandEpoch,
+			DealIDs:       v6.Info.DealIDs,
+			Expiration:    v6.Info.Expiration,
+			UnsealedCid:   nil,
+		},
+		PreCommitDeposit: v6.PreCommitDeposit,
+		PreCommitEpoch:   v6.PreCommitEpoch,
 	}
-
 }
 
 func (s *state6) GetState() interface{} {

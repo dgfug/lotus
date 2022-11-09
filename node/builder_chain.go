@@ -28,8 +28,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/wallet"
 	ledgerwallet "github.com/filecoin-project/lotus/chain/wallet/ledger"
 	"github.com/filecoin-project/lotus/chain/wallet/remotewallet"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/lib/peermgr"
+	"github.com/filecoin-project/lotus/markets/retrievaladapter"
 	"github.com/filecoin-project/lotus/markets/storageadapter"
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/hello"
@@ -40,6 +40,8 @@ import (
 	"github.com/filecoin-project/lotus/node/repo"
 	"github.com/filecoin-project/lotus/paychmgr"
 	"github.com/filecoin-project/lotus/paychmgr/settler"
+	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 // Chain node provides access to the Filecoin blockchain, by setting up a full
@@ -50,7 +52,7 @@ var ChainNode = Options(
 
 	// Consensus settings
 	Override(new(dtypes.DrandSchedule), modules.BuiltinDrandConfig),
-	Override(new(stmgr.UpgradeSchedule), filcns.DefaultUpgradeSchedule()),
+	Override(new(stmgr.UpgradeSchedule), modules.UpgradeSchedule),
 	Override(new(dtypes.NetworkName), modules.NetworkName),
 	Override(new(modules.Genesis), modules.ErrorGenesis),
 	Override(new(dtypes.AfterGenesisSet), modules.SetGenesis),
@@ -62,10 +64,10 @@ var ChainNode = Options(
 	Override(new(dtypes.DrandBootstrap), modules.DrandBootstrap),
 
 	// Consensus: crypto dependencies
-	Override(new(ffiwrapper.Verifier), ffiwrapper.ProofVerifier),
-	Override(new(ffiwrapper.Prover), ffiwrapper.ProofProver),
+	Override(new(storiface.Verifier), ffiwrapper.ProofVerifier),
+	Override(new(storiface.Prover), ffiwrapper.ProofProver),
 
-	// Consensus: VM
+	// Consensus: LegacyVM
 	Override(new(vm.SyscallBuilder), vm.Syscalls),
 
 	// Consensus: Chain storage/access
@@ -121,18 +123,21 @@ var ChainNode = Options(
 	// Markets (retrieval)
 	Override(new(discovery.PeerResolver), modules.RetrievalResolver),
 	Override(new(retrievalmarket.BlockstoreAccessor), modules.RetrievalBlockstoreAccessor),
-	Override(new(retrievalmarket.RetrievalClient), modules.RetrievalClient),
+	Override(new(retrievalmarket.RetrievalClient), modules.RetrievalClient(false)),
 	Override(new(dtypes.ClientDataTransfer), modules.NewClientGraphsyncDataTransfer),
 
 	// Markets (storage)
 	Override(new(*market.FundManager), market.NewFundManager),
 	Override(new(dtypes.ClientDatastore), modules.NewClientDatastore),
 	Override(new(storagemarket.BlockstoreAccessor), modules.StorageBlockstoreAccessor),
+	Override(new(*retrievaladapter.APIBlockstoreAccessor), retrievaladapter.NewAPIBlockstoreAdapter),
 	Override(new(storagemarket.StorageClient), modules.StorageClient),
 	Override(new(storagemarket.StorageClientNode), storageadapter.NewClientNodeAdapter),
 	Override(HandleMigrateClientFundsKey, modules.HandleMigrateClientFunds),
 
 	Override(new(*full.GasPriceCache), full.NewGasPriceCache),
+
+	Override(RelayIndexerMessagesKey, modules.RelayIndexerMessages),
 
 	// Lite node API
 	ApplyIf(isLiteNode,
@@ -178,7 +183,7 @@ func ConfigFullNode(c interface{}) Option {
 		Override(new(dtypes.UniversalBlockstore), modules.UniversalBlockstore),
 
 		If(cfg.Chainstore.EnableSplitstore,
-			If(cfg.Chainstore.Splitstore.ColdStoreType == "universal",
+			If(cfg.Chainstore.Splitstore.ColdStoreType == "universal" || cfg.Chainstore.Splitstore.ColdStoreType == "messages",
 				Override(new(dtypes.ColdBlockstore), From(new(dtypes.UniversalBlockstore)))),
 			If(cfg.Chainstore.Splitstore.ColdStoreType == "discard",
 				Override(new(dtypes.ColdBlockstore), modules.DiscardColdBlockstore)),
@@ -220,6 +225,8 @@ func ConfigFullNode(c interface{}) Option {
 			),
 		),
 		Override(new(dtypes.Graphsync), modules.Graphsync(cfg.Client.SimultaneousTransfersForStorage, cfg.Client.SimultaneousTransfersForRetrieval)),
+
+		Override(new(retrievalmarket.RetrievalClient), modules.RetrievalClient(cfg.Client.OffChainRetrieval)),
 
 		If(cfg.Wallet.RemoteBackend != "",
 			Override(new(*remotewallet.RemoteWallet), remotewallet.SetupRemoteWallet(cfg.Wallet.RemoteBackend)),

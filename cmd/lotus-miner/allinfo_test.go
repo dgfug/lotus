@@ -1,3 +1,4 @@
+// stm: #integration
 package main
 
 import (
@@ -6,12 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v2"
 
 	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/chain/actors/policy"
+	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/filecoin-project/lotus/node/repo"
 )
 
@@ -23,12 +23,6 @@ func TestMinerAllInfo(t *testing.T) {
 	_test = true
 
 	kit.QuietMiningLogs()
-
-	oldDelay := policy.GetPreCommitChallengeDelay()
-	policy.SetPreCommitChallengeDelay(5)
-	t.Cleanup(func() {
-		policy.SetPreCommitChallengeDelay(oldDelay)
-	})
 
 	client, miner, ens := kit.EnsembleMinimal(t)
 	ens.InterconnectAll().BeginMining(time.Second)
@@ -49,6 +43,7 @@ func TestMinerAllInfo(t *testing.T) {
 
 	t.Run("pre-info-all", run)
 
+	//stm: @CLIENT_DATA_IMPORT_001, @CLIENT_STORAGE_DEALS_GET_001
 	dh := kit.NewDealHarness(t, client, miner, miner)
 	deal, res, inPath := dh.MakeOnlineDeal(context.Background(), kit.MakeFullDealParams{Rseed: 6})
 	outPath := dh.PerformRetrieval(context.Background(), deal, res.Root, false)

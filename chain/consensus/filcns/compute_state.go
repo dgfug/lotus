@@ -4,8 +4,6 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/filecoin-project/lotus/chain/rand"
-
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/stats"
@@ -13,21 +11,24 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	actorstypes "github.com/filecoin-project/go-state-types/actors"
 	"github.com/filecoin-project/go-state-types/big"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
-
 	exported0 "github.com/filecoin-project/specs-actors/actors/builtin/exported"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	exported2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/exported"
 	exported3 "github.com/filecoin-project/specs-actors/v3/actors/builtin/exported"
 	exported4 "github.com/filecoin-project/specs-actors/v4/actors/builtin/exported"
 	exported5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/exported"
 	exported6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/exported"
+	exported7 "github.com/filecoin-project/specs-actors/v7/actors/builtin/exported"
 
+	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/cron"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
+	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -38,14 +39,15 @@ import (
 func NewActorRegistry() *vm.ActorRegistry {
 	inv := vm.NewActorRegistry()
 
-	// TODO: define all these properties on the actors themselves, in specs-actors.
-
-	inv.Register(vm.ActorsVersionPredicate(actors.Version0), exported0.BuiltinActors()...)
-	inv.Register(vm.ActorsVersionPredicate(actors.Version2), exported2.BuiltinActors()...)
-	inv.Register(vm.ActorsVersionPredicate(actors.Version3), exported3.BuiltinActors()...)
-	inv.Register(vm.ActorsVersionPredicate(actors.Version4), exported4.BuiltinActors()...)
-	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported5.BuiltinActors()...)
-	inv.Register(vm.ActorsVersionPredicate(actors.Version6), exported6.BuiltinActors()...)
+	inv.Register(actorstypes.Version0, vm.ActorsVersionPredicate(actorstypes.Version0), builtin.MakeRegistryLegacy(exported0.BuiltinActors()))
+	inv.Register(actorstypes.Version2, vm.ActorsVersionPredicate(actorstypes.Version2), builtin.MakeRegistryLegacy(exported2.BuiltinActors()))
+	inv.Register(actorstypes.Version3, vm.ActorsVersionPredicate(actorstypes.Version3), builtin.MakeRegistryLegacy(exported3.BuiltinActors()))
+	inv.Register(actorstypes.Version4, vm.ActorsVersionPredicate(actorstypes.Version4), builtin.MakeRegistryLegacy(exported4.BuiltinActors()))
+	inv.Register(actorstypes.Version5, vm.ActorsVersionPredicate(actorstypes.Version5), builtin.MakeRegistryLegacy(exported5.BuiltinActors()))
+	inv.Register(actorstypes.Version6, vm.ActorsVersionPredicate(actorstypes.Version6), builtin.MakeRegistryLegacy(exported6.BuiltinActors()))
+	inv.Register(actorstypes.Version7, vm.ActorsVersionPredicate(actorstypes.Version7), builtin.MakeRegistryLegacy(exported7.BuiltinActors()))
+	inv.Register(actorstypes.Version8, vm.ActorsVersionPredicate(actorstypes.Version8), builtin.MakeRegistry(actorstypes.Version8))
+	inv.Register(actorstypes.Version9, vm.ActorsVersionPredicate(actorstypes.Version9), builtin.MakeRegistry(actorstypes.Version9))
 
 	return inv
 }
@@ -66,7 +68,17 @@ type FilecoinBlockMessages struct {
 	WinCount int64
 }
 
-func (t *TipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []FilecoinBlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
+func (t *TipSetExecutor) ApplyBlocks(ctx context.Context,
+	sm *stmgr.StateManager,
+	parentEpoch abi.ChainEpoch,
+	pstate cid.Cid,
+	bms []FilecoinBlockMessages,
+	epoch abi.ChainEpoch,
+	r vm.Rand,
+	em stmgr.ExecMonitor,
+	vmTracing bool,
+	baseFee abi.TokenAmount,
+	ts *types.TipSet) (cid.Cid, cid.Cid, error) {
 	done := metrics.Timer(ctx, metrics.VMApplyBlocksTotal)
 	defer done()
 
@@ -75,29 +87,26 @@ func (t *TipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		partDone()
 	}()
 
-	makeVmWithBaseState := func(base cid.Cid) (*vm.VM, error) {
+	ctx = blockstore.WithHotView(ctx)
+	makeVmWithBaseStateAndEpoch := func(base cid.Cid, e abi.ChainEpoch) (vm.Interface, error) {
 		vmopt := &vm.VMOpts{
 			StateBase:      base,
-			Epoch:          epoch,
+			Epoch:          e,
 			Rand:           r,
 			Bstore:         sm.ChainStore().StateBlockstore(),
 			Actors:         NewActorRegistry(),
 			Syscalls:       sm.Syscalls,
 			CircSupplyCalc: sm.GetVMCirculatingSupply,
-			NtwkVersion:    sm.GetNtwkVersion,
+			NetworkVersion: sm.GetNetworkVersion(ctx, e),
 			BaseFee:        baseFee,
 			LookbackState:  stmgr.LookbackStateGetterForTipset(sm, ts),
+			Tracing:        vmTracing,
 		}
 
 		return sm.VMConstructor()(ctx, vmopt)
 	}
 
-	vmi, err := makeVmWithBaseState(pstate)
-	if err != nil {
-		return cid.Undef, cid.Undef, xerrors.Errorf("making vm: %w", err)
-	}
-
-	runCron := func(epoch abi.ChainEpoch) error {
+	runCron := func(vmCron vm.Interface, epoch abi.ChainEpoch) error {
 		cronMsg := &types.Message{
 			To:         cron.Address,
 			From:       builtin.SystemActorAddr,
@@ -109,55 +118,57 @@ func (t *TipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			Method:     cron.Methods.EpochTick,
 			Params:     nil,
 		}
-		ret, err := vmi.ApplyImplicitMessage(ctx, cronMsg)
+		ret, err := vmCron.ApplyImplicitMessage(ctx, cronMsg)
 		if err != nil {
-			return err
+			return xerrors.Errorf("running cron: %w", err)
 		}
+
 		if em != nil {
 			if err := em.MessageApplied(ctx, ts, cronMsg.Cid(), cronMsg, ret, true); err != nil {
 				return xerrors.Errorf("callback failed on cron message: %w", err)
 			}
 		}
 		if ret.ExitCode != 0 {
-			return xerrors.Errorf("CheckProofSubmissions exit was non-zero: %d", ret.ExitCode)
+			return xerrors.Errorf("cron exit was non-zero: %d", ret.ExitCode)
 		}
 
 		return nil
 	}
 
 	for i := parentEpoch; i < epoch; i++ {
+		var err error
 		if i > parentEpoch {
-			// run cron for null rounds if any
-			if err := runCron(i); err != nil {
-				return cid.Undef, cid.Undef, err
+			vmCron, err := makeVmWithBaseStateAndEpoch(pstate, i)
+			if err != nil {
+				return cid.Undef, cid.Undef, xerrors.Errorf("making cron vm: %w", err)
 			}
 
-			pstate, err = vmi.Flush(ctx)
+			// run cron for null rounds if any
+			if err = runCron(vmCron, i); err != nil {
+				return cid.Undef, cid.Undef, xerrors.Errorf("running cron: %w", err)
+			}
+
+			pstate, err = vmCron.Flush(ctx)
 			if err != nil {
-				return cid.Undef, cid.Undef, xerrors.Errorf("flushing vm: %w", err)
+				return cid.Undef, cid.Undef, xerrors.Errorf("flushing cron vm: %w", err)
 			}
 		}
 
 		// handle state forks
 		// XXX: The state tree
-		newState, err := sm.HandleStateForks(ctx, pstate, i, em, ts)
+		pstate, err = sm.HandleStateForks(ctx, pstate, i, em, ts)
 		if err != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("error handling state forks: %w", err)
 		}
-
-		if pstate != newState {
-			vmi, err = makeVmWithBaseState(newState)
-			if err != nil {
-				return cid.Undef, cid.Undef, xerrors.Errorf("making vm: %w", err)
-			}
-		}
-
-		vmi.SetBlockHeight(i + 1)
-		pstate = newState
 	}
 
 	partDone()
 	partDone = metrics.Timer(ctx, metrics.VMApplyMessages)
+
+	vmi, err := makeVmWithBaseStateAndEpoch(pstate, epoch)
+	if err != nil {
+		return cid.Undef, cid.Undef, xerrors.Errorf("making vm: %w", err)
+	}
 
 	var receipts []cbg.CBORMarshaler
 	processedMsgs := make(map[cid.Cid]struct{})
@@ -226,7 +237,7 @@ func (t *TipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 	partDone()
 	partDone = metrics.Timer(ctx, metrics.VMApplyCron)
 
-	if err := runCron(epoch); err != nil {
+	if err := runCron(vmi, epoch); err != nil {
 		return cid.Cid{}, cid.Cid{}, err
 	}
 
@@ -255,7 +266,11 @@ func (t *TipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 	return st, rectroot, nil
 }
 
-func (t *TipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManager, ts *types.TipSet, em stmgr.ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error) {
+func (t *TipSetExecutor) ExecuteTipSet(ctx context.Context,
+	sm *stmgr.StateManager,
+	ts *types.TipSet,
+	em stmgr.ExecMonitor,
+	vmTracing bool) (stateroot cid.Cid, rectsroot cid.Cid, err error) {
 	ctx, span := trace.StartSpan(ctx, "computeTipSetState")
 	defer span.End()
 
@@ -274,7 +289,7 @@ func (t *TipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 	var parentEpoch abi.ChainEpoch
 	pstate := blks[0].ParentStateRoot
 	if blks[0].Height > 0 {
-		parent, err := sm.ChainStore().GetBlock(blks[0].Parents[0])
+		parent, err := sm.ChainStore().GetBlock(ctx, blks[0].Parents[0])
 		if err != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("getting parent block: %w", err)
 		}
@@ -282,9 +297,9 @@ func (t *TipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 		parentEpoch = parent.Height
 	}
 
-	r := rand.NewStateRand(sm.ChainStore(), ts.Cids(), sm.Beacon())
+	r := rand.NewStateRand(sm.ChainStore(), ts.Cids(), sm.Beacon(), sm.GetNetworkVersion)
 
-	blkmsgs, err := sm.ChainStore().BlockMsgsForTipset(ts)
+	blkmsgs, err := sm.ChainStore().BlockMsgsForTipset(ctx, ts)
 	if err != nil {
 		return cid.Undef, cid.Undef, xerrors.Errorf("getting block messages for tipset: %w", err)
 	}
@@ -295,7 +310,7 @@ func (t *TipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 	}
 	baseFee := blks[0].ParentBaseFee
 
-	return t.ApplyBlocks(ctx, sm, parentEpoch, pstate, fbmsgs, blks[0].Height, r, em, baseFee, ts)
+	return t.ApplyBlocks(ctx, sm, parentEpoch, pstate, fbmsgs, blks[0].Height, r, em, vmTracing, baseFee, ts)
 }
 
 var _ stmgr.Executor = &TipSetExecutor{}

@@ -1,3 +1,4 @@
+// stm: #integration
 package itests
 
 import (
@@ -7,21 +8,28 @@ import (
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/network"
-	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/network"
+	miner5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/miner"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
-	sealing "github.com/filecoin-project/lotus/extern/storage-sealing"
+	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/filecoin-project/lotus/node/impl"
-	miner5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/miner"
+	sealing "github.com/filecoin-project/lotus/storage/pipeline"
 )
 
 func TestPledgeSectors(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
+
+	//stm: @CHAIN_INCOMING_HANDLE_INCOMING_BLOCKS_001, @CHAIN_INCOMING_VALIDATE_BLOCK_PUBSUB_001, @CHAIN_INCOMING_VALIDATE_MESSAGE_PUBSUB_001
 	kit.QuietMiningLogs()
 
 	blockTime := 50 * time.Millisecond
@@ -54,6 +62,7 @@ func TestPledgeSectors(t *testing.T) {
 }
 
 func TestPledgeBatching(t *testing.T) {
+	//stm: @SECTOR_PRE_COMMIT_FLUSH_001, @SECTOR_COMMIT_FLUSH_001
 	blockTime := 50 * time.Millisecond
 
 	runTest := func(t *testing.T, nSectors int) {
@@ -110,6 +119,12 @@ func TestPledgeBatching(t *testing.T) {
 }
 
 func TestPledgeMaxBatching(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
+
+	//stm: @CHAIN_INCOMING_HANDLE_INCOMING_BLOCKS_001, @CHAIN_INCOMING_VALIDATE_BLOCK_PUBSUB_001, @CHAIN_INCOMING_VALIDATE_MESSAGE_PUBSUB_001
 	blockTime := 50 * time.Millisecond
 
 	runTest := func(t *testing.T) {
@@ -173,6 +188,7 @@ func TestPledgeMaxBatching(t *testing.T) {
 		}
 
 		// Ensure that max aggregate message has propagated to the other node by checking current state
+		//stm: @CHAIN_STATE_MINER_SECTORS_001
 		sectorInfosAfter, err := full.StateMinerSectors(ctx, miner.ActorAddr, nil, types.EmptyTSK)
 		require.NoError(t, err)
 		assert.Equal(t, miner5.MaxAggregatedSectors+kit.DefaultPresealsPerBootstrapMiner, len(sectorInfosAfter))
@@ -182,6 +198,12 @@ func TestPledgeMaxBatching(t *testing.T) {
 }
 
 func TestPledgeBeforeNv13(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
+
+	//stm: @CHAIN_INCOMING_HANDLE_INCOMING_BLOCKS_001, @CHAIN_INCOMING_VALIDATE_BLOCK_PUBSUB_001, @CHAIN_INCOMING_VALIDATE_MESSAGE_PUBSUB_001
 	blocktime := 50 * time.Millisecond
 
 	runTest := func(t *testing.T, nSectors int) {

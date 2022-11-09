@@ -6,10 +6,9 @@ import (
 	"fmt"
 
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-pubsub-tracer/traced"
-
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
 	ma "github.com/multiformats/go-multiaddr"
 )
 
@@ -30,7 +29,7 @@ func PreparePubsubTracer(t *TestEnvironment) (*PubsubTracer, error) {
 	tracedIP := t.NetClient.MustGetDataNetworkIP().String()
 	tracedAddr := fmt.Sprintf("/ip4/%s/tcp/4001", tracedIP)
 
-	host, err := libp2p.New(ctx,
+	host, err := libp2p.New(
 		libp2p.Identity(privk),
 		libp2p.ListenAddrStrings(tracedAddr),
 	)

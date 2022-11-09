@@ -66,7 +66,7 @@ func BackupCmd(repoFlag string, rt repo.RepoType, getApi BackupApiFn) *cli.Comma
 			return xerrors.Errorf("opening backup file %s: %w", fpath, err)
 		}
 
-		if err := bds.Backup(out); err != nil {
+		if err := bds.Backup(cctx.Context, out); err != nil {
 			if cerr := out.Close(); cerr != nil {
 				log.Errorw("error closing backup file while handling backup error", "closeErr", cerr, "backupErr", err)
 			}
@@ -114,8 +114,8 @@ this command must be within this base path`,
 		},
 		ArgsUsage: "[backup file path]",
 		Action: func(cctx *cli.Context) error {
-			if cctx.Args().Len() != 1 {
-				return xerrors.Errorf("expected 1 argument")
+			if cctx.NArg() != 1 {
+				return IncorrectNumArgs(cctx)
 			}
 
 			if cctx.Bool("offline") {

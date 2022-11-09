@@ -1,15 +1,17 @@
+// stm: #unit
 package events
 
 import (
 	"context"
 	"testing"
 
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/crypto"
+
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -92,6 +94,7 @@ func (h *cacheHarness) skip(n abi.ChainEpoch) {
 }
 
 func TestTsCache(t *testing.T) {
+	//stm: @EVENTS_CACHE_GET_CHAIN_HEAD_001, @EVENTS_CACHE_GET_001, @EVENTS_CACHE_ADD_001
 	h := newCacheharness(t)
 
 	for i := 0; i < 9000; i++ {
@@ -104,6 +107,8 @@ func TestTsCache(t *testing.T) {
 }
 
 func TestTsCacheNulls(t *testing.T) {
+	//stm: @EVENTS_CACHE_GET_CHAIN_HEAD_001, @EVENTS_CACHE_GET_CHAIN_TIPSET_BEFORE_001, @EVENTS_CACHE_GET_CHAIN_TIPSET_AFTER_001
+	//stm: @EVENTS_CACHE_GET_001, @EVENTS_CACHE_ADD_001
 	ctx := context.Background()
 	h := newCacheharness(t)
 
@@ -182,6 +187,7 @@ func (tc *tsCacheAPIStorageCallCounter) ChainGetTipSet(ctx context.Context, tsk 
 }
 
 func TestTsCacheEmpty(t *testing.T) {
+	//stm: @EVENTS_CACHE_GET_CHAIN_HEAD_001
 	// Calling best on an empty cache should just call out to the chain API
 	callCounter := &tsCacheAPIStorageCallCounter{t: t}
 	tsc := newTSCache(callCounter, 50)
@@ -191,6 +197,7 @@ func TestTsCacheEmpty(t *testing.T) {
 }
 
 func TestTsCacheSkip(t *testing.T) {
+	//stm: @EVENTS_CACHE_GET_CHAIN_HEAD_001, @EVENTS_CACHE_GET_001, @EVENTS_CACHE_ADD_001
 	h := newCacheharness(t)
 
 	ts, err := types.NewTipSet([]*types.BlockHeader{{

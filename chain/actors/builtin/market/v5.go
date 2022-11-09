@@ -3,17 +3,18 @@ package market
 import (
 	"bytes"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/lotus/chain/actors/adt"
-	"github.com/filecoin-project/lotus/chain/types"
-
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	verifregtypes "github.com/filecoin-project/go-state-types/builtin/v9/verifreg"
 	market5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/market"
 	adt5 "github.com/filecoin-project/specs-actors/v5/actors/util/adt"
+
+	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 var _ State = (*state5)(nil)
@@ -178,7 +179,14 @@ func (s *dealStates5) array() adt.Array {
 }
 
 func fromV5DealState(v5 market5.DealState) DealState {
-	return (DealState)(v5)
+
+	return DealState{
+		SectorStartEpoch: v5.SectorStartEpoch,
+		LastUpdatedEpoch: v5.LastUpdatedEpoch,
+		SlashEpoch:       v5.SlashEpoch,
+		VerifiedClaim:    0,
+	}
+
 }
 
 type dealProposals5 struct {
@@ -194,14 +202,24 @@ func (s *dealProposals5) Get(dealID abi.DealID) (*DealProposal, bool, error) {
 	if !found {
 		return nil, false, nil
 	}
-	proposal := fromV5DealProposal(proposal5)
+
+	proposal, err := fromV5DealProposal(proposal5)
+	if err != nil {
+		return nil, true, xerrors.Errorf("decoding proposal: %w", err)
+	}
+
 	return &proposal, true, nil
 }
 
 func (s *dealProposals5) ForEach(cb func(dealID abi.DealID, dp DealProposal) error) error {
 	var dp5 market5.DealProposal
 	return s.Array.ForEach(&dp5, func(idx int64) error {
-		return cb(abi.DealID(idx), fromV5DealProposal(dp5))
+		dp, err := fromV5DealProposal(dp5)
+		if err != nil {
+			return xerrors.Errorf("decoding proposal: %w", err)
+		}
+
+		return cb(abi.DealID(idx), dp)
 	})
 }
 
@@ -210,7 +228,12 @@ func (s *dealProposals5) decode(val *cbg.Deferred) (*DealProposal, error) {
 	if err := dp5.UnmarshalCBOR(bytes.NewReader(val.Raw)); err != nil {
 		return nil, err
 	}
-	dp := fromV5DealProposal(dp5)
+
+	dp, err := fromV5DealProposal(dp5)
+	if err != nil {
+		return nil, err
+	}
+
 	return &dp, nil
 }
 
@@ -218,8 +241,30 @@ func (s *dealProposals5) array() adt.Array {
 	return s.Array
 }
 
-func fromV5DealProposal(v5 market5.DealProposal) DealProposal {
-	return (DealProposal)(v5)
+func fromV5DealProposal(v5 market5.DealProposal) (DealProposal, error) {
+
+	label, err := labelFromGoString(v5.Label)
+
+	if err != nil {
+		return DealProposal{}, xerrors.Errorf("error setting deal label: %w", err)
+	}
+
+	return DealProposal{
+		PieceCID:     v5.PieceCID,
+		PieceSize:    v5.PieceSize,
+		VerifiedDeal: v5.VerifiedDeal,
+		Client:       v5.Client,
+		Provider:     v5.Provider,
+
+		Label: label,
+
+		StartEpoch:           v5.StartEpoch,
+		EndEpoch:             v5.EndEpoch,
+		StoragePricePerEpoch: v5.StoragePricePerEpoch,
+
+		ProviderCollateral: v5.ProviderCollateral,
+		ClientCollateral:   v5.ClientCollateral,
+	}, nil
 }
 
 func (s *state5) GetState() interface{} {
@@ -241,13 +286,19 @@ type publishStorageDealsReturn5 struct {
 	market5.PublishStorageDealsReturn
 }
 
-func (r *publishStorageDealsReturn5) IsDealValid(index uint64) (bool, error) {
+func (r *publishStorageDealsReturn5) IsDealValid(index uint64) (bool, int, error) {
 
 	// PublishStorageDeals only succeeded if all deals were valid in this version of actors
-	return true, nil
+	return true, int(index), nil
 
 }
 
 func (r *publishStorageDealsReturn5) DealIDs() ([]abi.DealID, error) {
 	return r.IDs, nil
+}
+
+func (s *state5) GetAllocationIdForPendingDeal(dealId abi.DealID) (verifregtypes.AllocationId, error) {
+
+	return verifregtypes.NoAllocationID, xerrors.Errorf("unsupported before actors v9")
+
 }

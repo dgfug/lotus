@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/filecoin-project/go-address"
+	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/messagepool"
@@ -51,11 +54,11 @@ func (a *MpoolAPI) MpoolGetConfig(context.Context) (*types.MpoolConfig, error) {
 }
 
 func (a *MpoolAPI) MpoolSetConfig(ctx context.Context, cfg *types.MpoolConfig) error {
-	return a.Mpool.SetConfig(cfg)
+	return a.Mpool.SetConfig(ctx, cfg)
 }
 
 func (a *MpoolAPI) MpoolSelect(ctx context.Context, tsk types.TipSetKey, ticketQuality float64) ([]*types.SignedMessage, error) {
-	ts, err := a.Chain.GetTipSetFromKey(tsk)
+	ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
@@ -64,7 +67,7 @@ func (a *MpoolAPI) MpoolSelect(ctx context.Context, tsk types.TipSetKey, ticketQ
 }
 
 func (a *MpoolAPI) MpoolPending(ctx context.Context, tsk types.TipSetKey) ([]*types.SignedMessage, error) {
-	ts, err := a.Chain.GetTipSetFromKey(tsk)
+	ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
@@ -87,7 +90,7 @@ func (a *MpoolAPI) MpoolPending(ctx context.Context, tsk types.TipSetKey) ([]*ty
 
 			// different blocks in tipsets of the same height
 			// we exclude messages that have been included in blocks in the mpool tipset
-			have, err := a.Mpool.MessagesForBlocks(mpts.Blocks())
+			have, err := a.Mpool.MessagesForBlocks(ctx, mpts.Blocks())
 			if err != nil {
 				return nil, xerrors.Errorf("getting messages for base ts: %w", err)
 			}
@@ -97,7 +100,7 @@ func (a *MpoolAPI) MpoolPending(ctx context.Context, tsk types.TipSetKey) ([]*ty
 			}
 		}
 
-		msgs, err := a.Mpool.MessagesForBlocks(ts.Blocks())
+		msgs, err := a.Mpool.MessagesForBlocks(ctx, ts.Blocks())
 		if err != nil {
 			return nil, xerrors.Errorf(": %w", err)
 		}
@@ -115,7 +118,7 @@ func (a *MpoolAPI) MpoolPending(ctx context.Context, tsk types.TipSetKey) ([]*ty
 			return pending, nil
 		}
 
-		ts, err = a.Chain.LoadTipSet(ts.Parents())
+		ts, err = a.Chain.LoadTipSet(ctx, ts.Parents())
 		if err != nil {
 			return nil, xerrors.Errorf("loading parent tipset: %w", err)
 		}
@@ -139,6 +142,16 @@ func (a *MpoolAPI) MpoolPushMessage(ctx context.Context, msg *types.Message, spe
 	cp := *msg
 	msg = &cp
 	inMsg := *msg
+
+	// Check if this uuid has already been processed. Ignore if uuid is not populated
+	if (spec != nil) && (spec.MsgUuid != uuid.UUID{}) {
+		signedMessage, err := a.MessageSigner.GetSignedMessage(ctx, spec.MsgUuid)
+		if err == nil {
+			log.Warnf("Message already processed. cid=%s", signedMessage.Cid())
+			return signedMessage, nil
+		}
+	}
+
 	fromA, err := a.Stmgr.ResolveToKeyAddress(ctx, msg.From, nil)
 	if err != nil {
 		return nil, xerrors.Errorf("getting key address: %w", err)
@@ -177,17 +190,31 @@ func (a *MpoolAPI) MpoolPushMessage(ctx context.Context, msg *types.Message, spe
 		return nil, xerrors.Errorf("mpool push: getting origin balance: %w", err)
 	}
 
-	if b.LessThan(msg.Value) {
-		return nil, xerrors.Errorf("mpool push: not enough funds: %s < %s", b, msg.Value)
+	requiredFunds := big.Add(msg.Value, msg.RequiredFunds())
+	if b.LessThan(requiredFunds) {
+		return nil, xerrors.Errorf("mpool push: not enough funds: %s < %s", b, requiredFunds)
 	}
 
 	// Sign and push the message
-	return a.MessageSigner.SignMessage(ctx, msg, func(smsg *types.SignedMessage) error {
+	signedMsg, err := a.MessageSigner.SignMessage(ctx, msg, func(smsg *types.SignedMessage) error {
 		if _, err := a.MpoolModuleAPI.MpoolPush(ctx, smsg); err != nil {
 			return xerrors.Errorf("mpool push: failed to push message: %w", err)
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Store uuid->signed message in datastore
+	if (spec != nil) && (spec.MsgUuid != uuid.UUID{}) {
+		err = a.MessageSigner.StoreSignedMessage(ctx, spec.MsgUuid, signedMsg)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return signedMsg, nil
 }
 
 func (a *MpoolAPI) MpoolBatchPush(ctx context.Context, smsgs []*types.SignedMessage) ([]cid.Cid, error) {

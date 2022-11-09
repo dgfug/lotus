@@ -1,8 +1,9 @@
 package kit
 
 import (
-	"github.com/filecoin-project/lotus/lib/lotuslog"
 	logging "github.com/ipfs/go-log/v2"
+
+	"github.com/filecoin-project/lotus/lib/lotuslog"
 )
 
 func QuietMiningLogs() {
@@ -15,5 +16,6 @@ func QuietMiningLogs() {
 	_ = logging.SetLogLevel("storageminer", "ERROR")
 	_ = logging.SetLogLevel("pubsub", "ERROR")
 	_ = logging.SetLogLevel("gen", "ERROR")
+	_ = logging.SetLogLevel("rpc", "ERROR")
 	_ = logging.SetLogLevel("dht/RtRefreshManager", "ERROR")
 }

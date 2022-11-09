@@ -19,7 +19,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-cidutil/cidenc"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multibase"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
@@ -212,6 +212,7 @@ var setAskCmd = &cli.Command{
 			Name:        "max-piece-size",
 			Usage:       "Set maximum piece size (w/bit-padding, in bytes) in ask to `SIZE`",
 			DefaultText: "miner sector size",
+			Value:       "0",
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -352,6 +353,7 @@ var storageDealsCmd = &cli.Command{
 		resetBlocklistCmd,
 		setSealDurationCmd,
 		dealsPendingPublish,
+		dealsRetryPublish,
 	},
 }
 
@@ -368,8 +370,8 @@ var dealsImportDataCmd = &cli.Command{
 
 		ctx := lcli.DaemonContext(cctx)
 
-		if cctx.Args().Len() < 2 {
-			return fmt.Errorf("must specify proposal CID and file path")
+		if cctx.NArg() != 2 {
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		propCid, err := cid.Decode(cctx.Args().Get(0))
@@ -615,8 +617,8 @@ var setSealDurationCmd = &cli.Command{
 		}
 		defer closer()
 		ctx := lcli.ReqContext(cctx)
-		if cctx.Args().Len() != 1 {
-			return xerrors.Errorf("must pass duration in minutes")
+		if cctx.NArg() != 1 {
+			return lcli.IncorrectNumArgs(cctx)
 		}
 
 		hs, err := strconv.ParseUint(cctx.Args().Get(0), 10, 64)
@@ -637,6 +639,7 @@ var dataTransfersCmd = &cli.Command{
 		transfersListCmd,
 		marketRestartTransfer,
 		marketCancelTransfer,
+		transfersDiagnosticsCmd,
 	},
 }
 
@@ -856,6 +859,38 @@ var transfersListCmd = &cli.Command{
 	},
 }
 
+var transfersDiagnosticsCmd = &cli.Command{
+	Name:  "diagnostics",
+	Usage: "Get detailed diagnostics on active transfers with a specific peer",
+	Flags: []cli.Flag{},
+	Action: func(cctx *cli.Context) error {
+		if !cctx.Args().Present() {
+			return cli.ShowCommandHelp(cctx, cctx.Command.Name)
+		}
+		api, closer, err := lcli.GetMarketsAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := lcli.ReqContext(cctx)
+
+		targetPeer, err := peer.Decode(cctx.Args().First())
+		if err != nil {
+			return err
+		}
+		diagnostics, err := api.MarketDataTransferDiagnostics(ctx, targetPeer)
+		if err != nil {
+			return err
+		}
+		out, err := json.MarshalIndent(diagnostics, "", "\t")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(out))
+		return nil
+	},
+}
+
 var dealsPendingPublish = &cli.Command{
 	Name:  "pending-publish",
 	Usage: "list deals waiting in publish queue",
@@ -906,6 +941,36 @@ var dealsPendingPublish = &cli.Command{
 		}
 
 		fmt.Println("No deals queued to be published")
+		return nil
+	},
+}
+
+var dealsRetryPublish = &cli.Command{
+	Name:      "retry-publish",
+	Usage:     "retry publishing a deal",
+	ArgsUsage: "<proposal CID>",
+	Action: func(cctx *cli.Context) error {
+		if !cctx.Args().Present() {
+			return cli.ShowCommandHelp(cctx, cctx.Command.Name)
+		}
+		api, closer, err := lcli.GetMarketsAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := lcli.ReqContext(cctx)
+
+		propcid := cctx.Args().First()
+		fmt.Printf("retrying deal with proposal-cid: %s\n", propcid)
+
+		cid, err := cid.Decode(propcid)
+		if err != nil {
+			return err
+		}
+		if err := api.MarketRetryPublishDeal(ctx, cid); err != nil {
+			return xerrors.Errorf("retrying publishing deal: %w", err)
+		}
+		fmt.Println("retried to publish deal")
 		return nil
 	},
 }

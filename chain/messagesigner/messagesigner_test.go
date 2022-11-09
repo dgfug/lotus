@@ -1,3 +1,4 @@
+// stm: #unit
 package messagesigner
 
 import (
@@ -5,18 +6,15 @@ import (
 	"sync"
 	"testing"
 
-	"golang.org/x/xerrors"
-
-	"github.com/filecoin-project/lotus/chain/wallet"
-
-	"github.com/stretchr/testify/require"
-
+	"github.com/ipfs/go-datastore"
 	ds_sync "github.com/ipfs/go-datastore/sync"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/ipfs/go-datastore"
+	"github.com/filecoin-project/lotus/chain/wallet"
 )
 
 type mockMpool struct {
@@ -60,6 +58,7 @@ func TestMessageSignerSignMessage(t *testing.T) {
 	to2, err := w.WalletNew(ctx, types.KTSecp256k1)
 	require.NoError(t, err)
 
+	//stm: @CHAIN_MESSAGE_SIGNER_NEW_SIGNER_001, @CHAIN_MESSAGE_SIGNER_SIGN_MESSAGE_001, @CHAIN_MESSAGE_SIGNER_SIGN_MESSAGE_005
 	type msgSpec struct {
 		msg        *types.Message
 		mpoolNonce [1]uint64

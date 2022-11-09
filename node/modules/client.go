@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/namespace"
+	"github.com/libp2p/go-libp2p/core/host"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
@@ -14,11 +17,6 @@ import (
 	dtimpl "github.com/filecoin-project/go-data-transfer/impl"
 	dtnet "github.com/filecoin-project/go-data-transfer/network"
 	dtgstransport "github.com/filecoin-project/go-data-transfer/transport/graphsync"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/ipfs/go-datastore"
-	"github.com/ipfs/go-datastore/namespace"
-	"github.com/libp2p/go-libp2p-core/host"
-
 	"github.com/filecoin-project/go-fil-markets/discovery"
 	discoveryimpl "github.com/filecoin-project/go-fil-markets/discovery/impl"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
@@ -28,23 +26,25 @@ import (
 	storageimpl "github.com/filecoin-project/go-fil-markets/storagemarket/impl"
 	"github.com/filecoin-project/go-fil-markets/storagemarket/impl/requestvalidation"
 	smnet "github.com/filecoin-project/go-fil-markets/storagemarket/network"
-	"github.com/filecoin-project/lotus/blockstore"
-	"github.com/filecoin-project/lotus/markets/storageadapter"
+	"github.com/filecoin-project/go-state-types/abi"
 
+	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/market"
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/markets"
 	marketevents "github.com/filecoin-project/lotus/markets/loggers"
 	"github.com/filecoin-project/lotus/markets/retrievaladapter"
+	"github.com/filecoin-project/lotus/markets/storageadapter"
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/impl/full"
 	payapi "github.com/filecoin-project/lotus/node/impl/paych"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/filecoin-project/lotus/node/repo"
 	"github.com/filecoin-project/lotus/node/repo/imports"
 )
 
-func HandleMigrateClientFunds(lc fx.Lifecycle, ds dtypes.MetadataDS, wallet full.WalletAPI, fundMgr *market.FundManager) {
+func HandleMigrateClientFunds(lc fx.Lifecycle, mctx helpers.MetricsCtx, ds dtypes.MetadataDS, wallet full.WalletAPI, fundMgr *market.FundManager) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			addr, err := wallet.WalletDefaultAddress(ctx)
@@ -52,7 +52,7 @@ func HandleMigrateClientFunds(lc fx.Lifecycle, ds dtypes.MetadataDS, wallet full
 			if err != nil {
 				return nil
 			}
-			b, err := ds.Get(datastore.NewKey("/marketfunds/client"))
+			b, err := ds.Get(helpers.LifecycleCtx(mctx, lc), datastore.NewKey("/marketfunds/client"))
 			if err != nil {
 				if xerrors.Is(err, datastore.ErrNotFound) {
 					return nil
@@ -73,7 +73,7 @@ func HandleMigrateClientFunds(lc fx.Lifecycle, ds dtypes.MetadataDS, wallet full
 				return nil
 			}
 
-			return ds.Delete(datastore.NewKey("/marketfunds/client"))
+			return ds.Delete(helpers.LifecycleCtx(mctx, lc), datastore.NewKey("/marketfunds/client"))
 		},
 	})
 }
@@ -113,11 +113,7 @@ func NewClientGraphsyncDataTransfer(lc fx.Lifecycle, h host.Host, gs dtypes.Grap
 	net := dtnet.NewFromLibp2pHost(h, dtRetryParams)
 
 	dtDs := namespace.Wrap(ds, datastore.NewKey("/datatransfer/client/transfers"))
-	transport := dtgstransport.NewTransport(h.ID(), gs, net)
-	err := os.MkdirAll(filepath.Join(r.Path(), "data-transfer"), 0755) //nolint: gosec
-	if err != nil && !os.IsExist(err) {
-		return nil, err
-	}
+	transport := dtgstransport.NewTransport(h.ID(), gs)
 
 	// data-transfer push / pull channel restart configuration:
 	dtRestartConfig := dtimpl.ChannelRestartConfig(channelmonitor.Config{
@@ -137,7 +133,7 @@ func NewClientGraphsyncDataTransfer(lc fx.Lifecycle, h host.Host, gs dtypes.Grap
 		// After trying to restart 3 times, give up and fail the transfer
 		MaxConsecutiveRestarts: 3,
 	})
-	dt, err := dtimpl.NewDataTransfer(dtDs, filepath.Join(r.Path(), "data-transfer"), net, transport, dtRestartConfig)
+	dt, err := dtimpl.NewDataTransfer(dtDs, net, transport, dtRestartConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -205,26 +201,28 @@ func StorageClient(lc fx.Lifecycle, h host.Host, dataTransfer dtypes.ClientDataT
 }
 
 // RetrievalClient creates a new retrieval client attached to the client blockstore
-func RetrievalClient(lc fx.Lifecycle, h host.Host, r repo.LockedRepo, dt dtypes.ClientDataTransfer, payAPI payapi.PaychAPI, resolver discovery.PeerResolver,
-	ds dtypes.MetadataDS, chainAPI full.ChainAPI, stateAPI full.StateAPI, accessor retrievalmarket.BlockstoreAccessor, j journal.Journal) (retrievalmarket.RetrievalClient, error) {
+func RetrievalClient(forceOffChain bool) func(lc fx.Lifecycle, h host.Host, r repo.LockedRepo, dt dtypes.ClientDataTransfer, payAPI payapi.PaychAPI, resolver discovery.PeerResolver,
+	ds dtypes.MetadataDS, chainAPI full.ChainAPI, stateAPI full.StateAPI, accessor *retrievaladapter.APIBlockstoreAccessor, j journal.Journal) (retrievalmarket.RetrievalClient, error) {
+	return func(lc fx.Lifecycle, h host.Host, r repo.LockedRepo, dt dtypes.ClientDataTransfer, payAPI payapi.PaychAPI, resolver discovery.PeerResolver,
+		ds dtypes.MetadataDS, chainAPI full.ChainAPI, stateAPI full.StateAPI, accessor *retrievaladapter.APIBlockstoreAccessor, j journal.Journal) (retrievalmarket.RetrievalClient, error) {
+		adapter := retrievaladapter.NewRetrievalClientNode(forceOffChain, payAPI, chainAPI, stateAPI)
+		network := rmnet.NewFromLibp2pHost(h)
+		ds = namespace.Wrap(ds, datastore.NewKey("/retrievals/client"))
+		client, err := retrievalimpl.NewClient(network, dt, adapter, resolver, ds, accessor)
+		if err != nil {
+			return nil, err
+		}
+		client.OnReady(marketevents.ReadyLogger("retrieval client"))
+		lc.Append(fx.Hook{
+			OnStart: func(ctx context.Context) error {
+				client.SubscribeToEvents(marketevents.RetrievalClientLogger)
 
-	adapter := retrievaladapter.NewRetrievalClientNode(payAPI, chainAPI, stateAPI)
-	network := rmnet.NewFromLibp2pHost(h)
-	ds = namespace.Wrap(ds, datastore.NewKey("/retrievals/client"))
-	client, err := retrievalimpl.NewClient(network, dt, adapter, resolver, ds, accessor)
-	if err != nil {
-		return nil, err
+				evtType := j.RegisterEventType("markets/retrieval/client", "state_change")
+				client.SubscribeToEvents(markets.RetrievalClientJournaler(j, evtType))
+
+				return client.Start(ctx)
+			},
+		})
+		return client, nil
 	}
-	client.OnReady(marketevents.ReadyLogger("retrieval client"))
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			client.SubscribeToEvents(marketevents.RetrievalClientLogger)
-
-			evtType := j.RegisterEventType("markets/retrieval/client", "state_change")
-			client.SubscribeToEvents(markets.RetrievalClientJournaler(j, evtType))
-
-			return client.Start(ctx)
-		},
-	})
-	return client, nil
 }

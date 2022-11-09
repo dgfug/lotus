@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/filecoin-project/lotus/chain/rand"
-
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
@@ -14,9 +12,14 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/manifest"
+	gstStore "github.com/filecoin-project/go-state-types/store"
+
 	"github.com/filecoin-project/lotus/api"
 	init_ "github.com/filecoin-project/lotus/chain/actors/builtin/init"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
+	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -27,13 +30,14 @@ import (
 func GetReturnType(ctx context.Context, sm *StateManager, to address.Address, method abi.MethodNum, ts *types.TipSet) (cbg.CBORUnmarshaler, error) {
 	act, err := sm.LoadActor(ctx, to, ts)
 	if err != nil {
-		return nil, xerrors.Errorf("(get sset) failed to load miner actor: %w", err)
+		return nil, xerrors.Errorf("(get sset) failed to load actor: %w", err)
 	}
 
 	m, found := sm.tsExec.NewActorRegistry().Methods[act.Code][method]
 	if !found {
 		return nil, fmt.Errorf("unknown method %d for actor %s", method, act.Code)
 	}
+
 	return reflect.New(m.Ret.Elem()).Interface().(cbg.CBORUnmarshaler), nil
 }
 
@@ -79,7 +83,7 @@ func ComputeState(ctx context.Context, sm *StateManager, height abi.ChainEpoch, 
 		// future. It's not guaranteed to be accurate... but that's fine.
 	}
 
-	r := rand.NewStateRand(sm.cs, ts.Cids(), sm.beacon)
+	r := rand.NewStateRand(sm.cs, ts.Cids(), sm.beacon, sm.GetNetworkVersion)
 	vmopt := &vm.VMOpts{
 		StateBase:      base,
 		Epoch:          height,
@@ -88,9 +92,10 @@ func ComputeState(ctx context.Context, sm *StateManager, height abi.ChainEpoch, 
 		Actors:         sm.tsExec.NewActorRegistry(),
 		Syscalls:       sm.Syscalls,
 		CircSupplyCalc: sm.GetVMCirculatingSupply,
-		NtwkVersion:    sm.GetNtwkVersion,
+		NetworkVersion: sm.GetNetworkVersion(ctx, height),
 		BaseFee:        ts.Blocks()[0].ParentBaseFee,
 		LookbackState:  LookbackStateGetterForTipset(sm, ts),
+		Tracing:        true,
 	}
 	vmi, err := sm.newVM(ctx, vmopt)
 	if err != nil {
@@ -128,7 +133,7 @@ func LookbackStateGetterForTipset(sm *StateManager, ts *types.TipSet) vm.Lookbac
 
 func GetLookbackTipSetForRound(ctx context.Context, sm *StateManager, ts *types.TipSet, round abi.ChainEpoch) (*types.TipSet, cid.Cid, error) {
 	var lbr abi.ChainEpoch
-	lb := policy.GetWinningPoStSectorSetLookback(sm.GetNtwkVersion(ctx, round))
+	lb := policy.GetWinningPoStSectorSetLookback(sm.GetNetworkVersion(ctx, round))
 	if round > lb {
 		lbr = round - lb
 	}
@@ -155,7 +160,7 @@ func GetLookbackTipSetForRound(ctx context.Context, sm *StateManager, ts *types.
 
 	}
 
-	lbts, err := sm.ChainStore().GetTipSetFromKey(nextTs.Parents())
+	lbts, err := sm.ChainStore().GetTipSetFromKey(ctx, nextTs.Parents())
 	if err != nil {
 		return nil, cid.Undef, xerrors.Errorf("failed to resolve lookback tipset: %w", err)
 	}
@@ -210,4 +215,26 @@ func (sm *StateManager) ListAllActors(ctx context.Context, ts *types.TipSet) ([]
 	}
 
 	return out, nil
+}
+
+func GetManifestData(ctx context.Context, st *state.StateTree) (*manifest.ManifestData, error) {
+	wrapStore := gstStore.WrapStore(ctx, st.Store)
+
+	systemActor, err := st.GetActor(system.Address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system actor: %w", err)
+	}
+	systemActorState, err := system.Load(wrapStore, systemActor)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to load system actor state: %w", err)
+	}
+
+	actorsManifestDataCid := systemActorState.GetBuiltinActors()
+
+	var mfData manifest.ManifestData
+	if err := wrapStore.Get(ctx, actorsManifestDataCid, &mfData); err != nil {
+		return nil, xerrors.Errorf("error fetching data: %w", err)
+	}
+
+	return &mfData, nil
 }

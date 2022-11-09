@@ -1,3 +1,4 @@
+// stm: #integration
 package itests
 
 import (
@@ -10,26 +11,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/cli"
-	"github.com/filecoin-project/lotus/itests/kit"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/chain/actors/adt"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	"github.com/stretchr/testify/require"
 
+	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/cli"
+	"github.com/filecoin-project/lotus/itests/kit"
 )
 
 // TestPaymentChannelsBasic does a basic test to exercise the payment channel CLI
 // commands
 func TestPaymentChannelsBasic(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
+
+	//stm: @CHAIN_INCOMING_HANDLE_INCOMING_BLOCKS_001, @CHAIN_INCOMING_VALIDATE_BLOCK_PUBSUB_001, @CHAIN_INCOMING_VALIDATE_MESSAGE_PUBSUB_001
 	_ = os.Setenv("BELLMAN_NO_GPU", "1")
 	kit.QuietMiningLogs()
 
@@ -59,6 +67,21 @@ func TestPaymentChannelsBasic(t *testing.T) {
 	vamt := strconv.Itoa(voucherAmt)
 	voucher := creatorCLI.RunCmd("paych", "voucher", "create", chAddr.String(), vamt)
 
+	// DEFLAKE: We have observed this test flakily failing when the receiver node hasn't seen the paych create message
+	// This makes us wait as much as 10 epochs before giving up and failing
+	retry := 0
+	_, err = paymentReceiver.StateLookupID(ctx, chAddr, types.EmptyTSK)
+	for err != nil && xerrors.Is(err, &api.ErrActorNotFound{}) {
+		time.Sleep(blocktime)
+		_, err = paymentReceiver.StateLookupID(ctx, chAddr, types.EmptyTSK)
+		retry++
+		if retry > 10 {
+			break
+		}
+	}
+
+	require.NoError(t, err)
+
 	// receiver: paych voucher add <channel> <voucher>
 	receiverCLI.RunCmd("paych", "voucher", "add", chAddr.String(), voucher)
 
@@ -87,6 +110,10 @@ type voucherSpec struct {
 
 // TestPaymentChannelStatus tests the payment channel status CLI command
 func TestPaymentChannelStatus(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
 	_ = os.Setenv("BELLMAN_NO_GPU", "1")
 	kit.QuietMiningLogs()
 
@@ -133,10 +160,10 @@ func TestPaymentChannelStatus(t *testing.T) {
 	require.True(t, stateCreating || stateCreated)
 
 	channelAmtAtto := types.BigMul(types.NewInt(channelAmt), types.NewInt(build.FilecoinPrecision))
-	channelAmtStr := fmt.Sprintf("%d", channelAmtAtto)
+	channelAmtStr := fmt.Sprintf("%s", types.FIL(channelAmtAtto))
 	if stateCreating {
 		// If we're in the creating state (most likely) the amount should be pending
-		require.Regexp(t, regexp.MustCompile("Pending.*"+channelAmtStr), out)
+		require.Regexp(t, regexp.MustCompile("Pending Amt.*"+channelAmtStr), out)
 	}
 
 	// Wait for create channel to complete
@@ -159,7 +186,7 @@ func TestPaymentChannelStatus(t *testing.T) {
 	out = creatorCLI.RunCmd("paych", "status", chstr)
 	fmt.Println(out)
 	voucherAmtAtto := types.BigMul(types.NewInt(voucherAmt), types.NewInt(build.FilecoinPrecision))
-	voucherAmtStr := fmt.Sprintf("%d", voucherAmtAtto)
+	voucherAmtStr := fmt.Sprintf("%s", types.FIL(voucherAmtAtto))
 	// Output should include voucher amount
 	require.Regexp(t, regexp.MustCompile("Voucher.*"+voucherAmtStr), out)
 }
@@ -167,6 +194,12 @@ func TestPaymentChannelStatus(t *testing.T) {
 // TestPaymentChannelVouchers does a basic test to exercise some payment
 // channel voucher commands
 func TestPaymentChannelVouchers(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
+
+	//stm: @CHAIN_INCOMING_HANDLE_INCOMING_BLOCKS_001, @CHAIN_INCOMING_VALIDATE_BLOCK_PUBSUB_001, @CHAIN_INCOMING_VALIDATE_MESSAGE_PUBSUB_001
 	_ = os.Setenv("BELLMAN_NO_GPU", "1")
 	kit.QuietMiningLogs()
 
@@ -299,6 +332,12 @@ func TestPaymentChannelVouchers(t *testing.T) {
 // TestPaymentChannelVoucherCreateShortfall verifies that if a voucher amount
 // is greater than what's left in the channel, voucher create fails
 func TestPaymentChannelVoucherCreateShortfall(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
+
+	//stm: @CHAIN_INCOMING_HANDLE_INCOMING_BLOCKS_001, @CHAIN_INCOMING_VALIDATE_BLOCK_PUBSUB_001, @CHAIN_INCOMING_VALIDATE_MESSAGE_PUBSUB_001
 	_ = os.Setenv("BELLMAN_NO_GPU", "1")
 	kit.QuietMiningLogs()
 

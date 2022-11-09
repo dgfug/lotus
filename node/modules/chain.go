@@ -7,8 +7,8 @@ import (
 	"github.com/ipfs/go-bitswap"
 	"github.com/ipfs/go-bitswap/network"
 	"github.com/ipfs/go-blockservice"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/routing"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/routing"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
@@ -18,6 +18,7 @@ import (
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/exchange"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	"github.com/filecoin-project/lotus/chain/messagepool"
@@ -30,7 +31,7 @@ import (
 )
 
 // ChainBitswap uses a blockstore that bypasses all caches.
-func ChainBitswap(mctx helpers.MetricsCtx, lc fx.Lifecycle, host host.Host, rt routing.Routing, bs dtypes.ExposedBlockstore) dtypes.ChainBitswap {
+func ChainBitswap(lc fx.Lifecycle, mctx helpers.MetricsCtx, host host.Host, rt routing.Routing, bs dtypes.ExposedBlockstore) dtypes.ChainBitswap {
 	// prefix protocol for chain bitswap
 	// (so bitswap uses /chain/ipfs/bitswap/1.0.0 internally for chain sync stuff)
 	bitswapNetwork := network.NewFromIpfsHost(host, rt, network.Prefix("/chain"))
@@ -58,8 +59,8 @@ func ChainBlockService(bs dtypes.ExposedBlockstore, rem dtypes.ChainBitswap) dty
 	return blockservice.New(bs, rem)
 }
 
-func MessagePool(lc fx.Lifecycle, us stmgr.UpgradeSchedule, mpp messagepool.Provider, ds dtypes.MetadataDS, nn dtypes.NetworkName, j journal.Journal, protector dtypes.GCReferenceProtector) (*messagepool.MessagePool, error) {
-	mp, err := messagepool.New(mpp, ds, us, nn, j)
+func MessagePool(lc fx.Lifecycle, mctx helpers.MetricsCtx, us stmgr.UpgradeSchedule, mpp messagepool.Provider, ds dtypes.MetadataDS, nn dtypes.NetworkName, j journal.Journal, protector dtypes.GCReferenceProtector) (*messagepool.MessagePool, error) {
+	mp, err := messagepool.New(helpers.LifecycleCtx(mctx, lc), mpp, ds, us, nn, j)
 	if err != nil {
 		return nil, xerrors.Errorf("constructing mpool: %w", err)
 	}
@@ -73,23 +74,25 @@ func MessagePool(lc fx.Lifecycle, us stmgr.UpgradeSchedule, mpp messagepool.Prov
 }
 
 func ChainStore(lc fx.Lifecycle,
+	mctx helpers.MetricsCtx,
 	cbs dtypes.ChainBlockstore,
 	sbs dtypes.StateBlockstore,
 	ds dtypes.MetadataDS,
 	basebs dtypes.BaseBlockstore,
 	weight store.WeightFunc,
+	us stmgr.UpgradeSchedule,
 	j journal.Journal) *store.ChainStore {
 
 	chain := store.NewChainStore(cbs, sbs, ds, weight, j)
 
-	if err := chain.Load(); err != nil {
+	if err := chain.Load(helpers.LifecycleCtx(mctx, lc)); err != nil {
 		log.Warnf("loading chain state from disk: %s", err)
 	}
 
 	var startHook func(context.Context) error
 	if ss, ok := basebs.(*splitstore.SplitStore); ok {
 		startHook = func(_ context.Context) error {
-			err := ss.Start(chain)
+			err := ss.Start(chain, us)
 			if err != nil {
 				err = xerrors.Errorf("error starting splitstore: %w", err)
 			}
@@ -173,4 +176,8 @@ func NewSyncer(params SyncerParams) (*chain.Syncer, error) {
 
 func NewSlashFilter(ds dtypes.MetadataDS) *slashfilter.SlashFilter {
 	return slashfilter.New(ds)
+}
+
+func UpgradeSchedule() stmgr.UpgradeSchedule {
+	return filcns.DefaultUpgradeSchedule()
 }

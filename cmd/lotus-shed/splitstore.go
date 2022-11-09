@@ -10,15 +10,13 @@ import (
 	"runtime"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/urfave/cli/v2"
-	"go.uber.org/multierr"
-	"golang.org/x/sync/errgroup"
-	"golang.org/x/xerrors"
-
-	"go.uber.org/zap"
-
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/query"
+	"github.com/urfave/cli/v2"
+	"go.uber.org/multierr"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/xerrors"
 
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/node/config"
@@ -331,7 +329,7 @@ func deleteSplitstoreKeys(lr repo.LockedRepo) error {
 	}
 
 	var keys []datastore.Key
-	res, err := ds.Query(query.Query{Prefix: "/splitstore"})
+	res, err := ds.Query(context.Background(), query.Query{Prefix: "/splitstore"})
 	if err != nil {
 		return xerrors.Errorf("error querying datastore for splitstore keys: %w", err)
 	}
@@ -346,7 +344,7 @@ func deleteSplitstoreKeys(lr repo.LockedRepo) error {
 
 	for _, k := range keys {
 		fmt.Printf("deleting %s from datastore...\n", k)
-		err = ds.Delete(k)
+		err = ds.Delete(context.Background(), k)
 		if err != nil {
 			return xerrors.Errorf("error deleting key %s from datastore: %w", k, err)
 		}

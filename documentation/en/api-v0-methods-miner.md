@@ -9,13 +9,18 @@
   * [ActorAddress](#ActorAddress)
   * [ActorAddressConfig](#ActorAddressConfig)
   * [ActorSectorSize](#ActorSectorSize)
+  * [ActorWithdrawBalance](#ActorWithdrawBalance)
 * [Auth](#Auth)
   * [AuthNew](#AuthNew)
   * [AuthVerify](#AuthVerify)
+* [Beneficiary](#Beneficiary)
+  * [BeneficiaryWithdrawBalance](#BeneficiaryWithdrawBalance)
 * [Check](#Check)
   * [CheckProvable](#CheckProvable)
 * [Compute](#Compute)
+  * [ComputeDataCid](#ComputeDataCid)
   * [ComputeProof](#ComputeProof)
+  * [ComputeWindowPoSt](#ComputeWindowPoSt)
 * [Create](#Create)
   * [CreateBackup](#CreateBackup)
 * [Dagstore](#Dagstore)
@@ -23,7 +28,9 @@
   * [DagstoreInitializeAll](#DagstoreInitializeAll)
   * [DagstoreInitializeShard](#DagstoreInitializeShard)
   * [DagstoreListShards](#DagstoreListShards)
+  * [DagstoreLookupPieces](#DagstoreLookupPieces)
   * [DagstoreRecoverShard](#DagstoreRecoverShard)
+  * [DagstoreRegisterShard](#DagstoreRegisterShard)
 * [Deals](#Deals)
   * [DealsConsiderOfflineRetrievalDeals](#DealsConsiderOfflineRetrievalDeals)
   * [DealsConsiderOfflineStorageDeals](#DealsConsiderOfflineStorageDeals)
@@ -43,12 +50,16 @@
   * [DealsSetPieceCidBlocklist](#DealsSetPieceCidBlocklist)
 * [I](#I)
   * [ID](#ID)
+* [Indexer](#Indexer)
+  * [IndexerAnnounceAllDeals](#IndexerAnnounceAllDeals)
+  * [IndexerAnnounceDeal](#IndexerAnnounceDeal)
 * [Log](#Log)
   * [LogAlerts](#LogAlerts)
   * [LogList](#LogList)
   * [LogSetLevel](#LogSetLevel)
 * [Market](#Market)
   * [MarketCancelDataTransfer](#MarketCancelDataTransfer)
+  * [MarketDataTransferDiagnostics](#MarketDataTransferDiagnostics)
   * [MarketDataTransferUpdates](#MarketDataTransferUpdates)
   * [MarketGetAsk](#MarketGetAsk)
   * [MarketGetDealUpdates](#MarketGetDealUpdates)
@@ -61,6 +72,7 @@
   * [MarketPendingDeals](#MarketPendingDeals)
   * [MarketPublishPendingDeals](#MarketPublishPendingDeals)
   * [MarketRestartDataTransfer](#MarketRestartDataTransfer)
+  * [MarketRetryPublishDeal](#MarketRetryPublishDeal)
   * [MarketSetAsk](#MarketSetAsk)
   * [MarketSetRetrievalAsk](#MarketSetRetrievalAsk)
 * [Mining](#Mining)
@@ -79,9 +91,16 @@
   * [NetConnectedness](#NetConnectedness)
   * [NetDisconnect](#NetDisconnect)
   * [NetFindPeer](#NetFindPeer)
+  * [NetLimit](#NetLimit)
   * [NetPeerInfo](#NetPeerInfo)
   * [NetPeers](#NetPeers)
+  * [NetPing](#NetPing)
+  * [NetProtectAdd](#NetProtectAdd)
+  * [NetProtectList](#NetProtectList)
+  * [NetProtectRemove](#NetProtectRemove)
   * [NetPubsubScores](#NetPubsubScores)
+  * [NetSetLimit](#NetSetLimit)
+  * [NetStat](#NetStat)
 * [Pieces](#Pieces)
   * [PiecesGetCIDInfo](#PiecesGetCIDInfo)
   * [PiecesGetPieceInfo](#PiecesGetPieceInfo)
@@ -89,13 +108,22 @@
   * [PiecesListPieces](#PiecesListPieces)
 * [Pledge](#Pledge)
   * [PledgeSector](#PledgeSector)
+* [Recover](#Recover)
+  * [RecoverFault](#RecoverFault)
 * [Return](#Return)
   * [ReturnAddPiece](#ReturnAddPiece)
+  * [ReturnDataCid](#ReturnDataCid)
+  * [ReturnDownloadSector](#ReturnDownloadSector)
   * [ReturnFetch](#ReturnFetch)
+  * [ReturnFinalizeReplicaUpdate](#ReturnFinalizeReplicaUpdate)
   * [ReturnFinalizeSector](#ReturnFinalizeSector)
+  * [ReturnGenerateSectorKeyFromData](#ReturnGenerateSectorKeyFromData)
   * [ReturnMoveStorage](#ReturnMoveStorage)
+  * [ReturnProveReplicaUpdate1](#ReturnProveReplicaUpdate1)
+  * [ReturnProveReplicaUpdate2](#ReturnProveReplicaUpdate2)
   * [ReturnReadPiece](#ReturnReadPiece)
   * [ReturnReleaseUnsealed](#ReturnReleaseUnsealed)
+  * [ReturnReplicaUpdate](#ReturnReplicaUpdate)
   * [ReturnSealCommit1](#ReturnSealCommit1)
   * [ReturnSealCommit2](#ReturnSealCommit2)
   * [ReturnSealPreCommit1](#ReturnSealPreCommit1)
@@ -105,16 +133,25 @@
   * [RuntimeSubsystems](#RuntimeSubsystems)
 * [Sealing](#Sealing)
   * [SealingAbort](#SealingAbort)
+  * [SealingRemoveRequest](#SealingRemoveRequest)
   * [SealingSchedDiag](#SealingSchedDiag)
 * [Sector](#Sector)
+  * [SectorAbortUpgrade](#SectorAbortUpgrade)
   * [SectorAddPieceToAny](#SectorAddPieceToAny)
   * [SectorCommitFlush](#SectorCommitFlush)
   * [SectorCommitPending](#SectorCommitPending)
   * [SectorGetExpectedSealDuration](#SectorGetExpectedSealDuration)
   * [SectorGetSealDelay](#SectorGetSealDelay)
   * [SectorMarkForUpgrade](#SectorMarkForUpgrade)
+  * [SectorMatchPendingPiecesToOpenSectors](#SectorMatchPendingPiecesToOpenSectors)
+  * [SectorNumAssignerMeta](#SectorNumAssignerMeta)
+  * [SectorNumFree](#SectorNumFree)
+  * [SectorNumReservations](#SectorNumReservations)
+  * [SectorNumReserve](#SectorNumReserve)
+  * [SectorNumReserveCount](#SectorNumReserveCount)
   * [SectorPreCommitFlush](#SectorPreCommitFlush)
   * [SectorPreCommitPending](#SectorPreCommitPending)
+  * [SectorReceive](#SectorReceive)
   * [SectorRemove](#SectorRemove)
   * [SectorSetExpectedSealDuration](#SectorSetExpectedSealDuration)
   * [SectorSetSealDelay](#SectorSetSealDelay)
@@ -130,17 +167,24 @@
   * [SectorsSummary](#SectorsSummary)
   * [SectorsUnsealPiece](#SectorsUnsealPiece)
   * [SectorsUpdate](#SectorsUpdate)
+* [Start](#Start)
+  * [StartTime](#StartTime)
 * [Storage](#Storage)
   * [StorageAddLocal](#StorageAddLocal)
   * [StorageAttach](#StorageAttach)
+  * [StorageAuthVerify](#StorageAuthVerify)
   * [StorageBestAlloc](#StorageBestAlloc)
   * [StorageDeclareSector](#StorageDeclareSector)
+  * [StorageDetach](#StorageDetach)
+  * [StorageDetachLocal](#StorageDetachLocal)
   * [StorageDropSector](#StorageDropSector)
   * [StorageFindSector](#StorageFindSector)
+  * [StorageGetLocks](#StorageGetLocks)
   * [StorageInfo](#StorageInfo)
   * [StorageList](#StorageList)
   * [StorageLocal](#StorageLocal)
   * [StorageLock](#StorageLock)
+  * [StorageRedeclareLocal](#StorageRedeclareLocal)
   * [StorageReportHealth](#StorageReportHealth)
   * [StorageStat](#StorageStat)
   * [StorageTryLock](#StorageTryLock)
@@ -208,7 +252,7 @@ Response:
 ```json
 {
   "Version": "string value",
-  "APIVersion": 131328,
+  "APIVersion": 131840,
   "BlockDelay": 42
 }
 ```
@@ -235,10 +279,18 @@ Inputs: `null`
 Response:
 ```json
 {
-  "PreCommitControl": null,
-  "CommitControl": null,
-  "TerminateControl": null,
-  "DealPublishControl": null,
+  "PreCommitControl": [
+    "f01234"
+  ],
+  "CommitControl": [
+    "f01234"
+  ],
+  "TerminateControl": [
+    "f01234"
+  ],
+  "DealPublishControl": [
+    "f01234"
+  ],
   "DisableOwnerFallback": true,
   "DisableWorkerFallback": true
 }
@@ -258,6 +310,28 @@ Inputs:
 
 Response: `34359738368`
 
+### ActorWithdrawBalance
+WithdrawBalance allows to withdraw balance from miner actor to owner address
+Specify amount as "0" to withdraw full balance. This method returns a message CID
+and does not wait for message execution
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "0"
+]
+```
+
+Response:
+```json
+{
+  "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+}
+```
+
 ## Auth
 
 
@@ -269,7 +343,9 @@ Perms: admin
 Inputs:
 ```json
 [
-  null
+  [
+    "write"
+  ]
 ]
 ```
 
@@ -287,7 +363,37 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  "write"
+]
+```
+
+## Beneficiary
+
+
+### BeneficiaryWithdrawBalance
+BeneficiaryWithdrawBalance allows the beneficiary of a miner to withdraw balance from miner actor
+Specify amount as "0" to withdraw full balance. This method returns a message CID
+and does not wait for message execution
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "0"
+]
+```
+
+Response:
+```json
+{
+  "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+}
+```
 
 ## Check
 
@@ -301,7 +407,15 @@ Inputs:
 ```json
 [
   8,
-  null,
+  [
+    {
+      "ID": {
+        "Miner": 1000,
+        "Number": 9
+      },
+      "ProofType": 8
+    }
+  ],
   true
 ]
 ```
@@ -316,6 +430,29 @@ Response:
 ## Compute
 
 
+### ComputeDataCid
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  1024,
+  {}
+]
+```
+
+Response:
+```json
+{
+  "Size": 1032,
+  "PieceCID": {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
+}
+```
+
 ### ComputeProof
 
 
@@ -324,12 +461,77 @@ Perms: read
 Inputs:
 ```json
 [
-  null,
-  null
+  [
+    {
+      "SealProof": 8,
+      "SectorNumber": 9,
+      "SectorKey": null,
+      "SealedCID": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      }
+    }
+  ],
+  "Bw==",
+  10101,
+  17
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "PoStProof": 8,
+    "ProofBytes": "Ynl0ZSBhcnJheQ=="
+  }
+]
+```
+
+### ComputeWindowPoSt
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  42,
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    {
+      "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+    }
+  ]
+]
+```
+
+Response:
+```json
+[
+  {
+    "Deadline": 42,
+    "Partitions": [
+      {
+        "Index": 42,
+        "Skipped": [
+          5,
+          1
+        ]
+      }
+    ],
+    "Proofs": [
+      {
+        "PoStProof": 8,
+        "ProofBytes": "Ynl0ZSBhcnJheQ=="
+      }
+    ],
+    "ChainCommitEpoch": 10101,
+    "ChainCommitRand": "Bw=="
+  }
+]
+```
 
 ## Create
 
@@ -363,7 +565,16 @@ Perms: admin
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Key": "baga6ea4seaqecmtz7iak33dsfshi627abz4i4665dfuzr3qfs4bmad6dx3iigdq",
+    "Success": false,
+    "Error": "\u003cerror\u003e"
+  }
+]
+```
 
 ### DagstoreInitializeAll
 DagstoreInitializeAll initializes all uninitialized shards in bulk,
@@ -439,7 +650,42 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Key": "baga6ea4seaqecmtz7iak33dsfshi627abz4i4665dfuzr3qfs4bmad6dx3iigdq",
+    "State": "ShardStateAvailable",
+    "Error": "\u003cerror\u003e"
+  }
+]
+```
+
+### DagstoreLookupPieces
+DagstoreLookupPieces returns information about shards that contain the given CID.
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
+]
+```
+
+Response:
+```json
+[
+  {
+    "Key": "baga6ea4seaqecmtz7iak33dsfshi627abz4i4665dfuzr3qfs4bmad6dx3iigdq",
+    "State": "ShardStateAvailable",
+    "Error": "\u003cerror\u003e"
+  }
+]
+```
 
 ### DagstoreRecoverShard
 DagstoreRecoverShard attempts to recover a failed shard.
@@ -450,6 +696,21 @@ error.
 
 
 Perms: write
+
+Inputs:
+```json
+[
+  "string value"
+]
+```
+
+Response: `{}`
+
+### DagstoreRegisterShard
+DagstoreRegisterShard registers a shard manually with dagstore with given pieceCID
+
+
+Perms: admin
 
 Inputs:
 ```json
@@ -541,7 +802,34 @@ Perms: admin
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Proposal": {
+      "PieceCID": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      "PieceSize": 1032,
+      "VerifiedDeal": true,
+      "Client": "f01234",
+      "Provider": "f01234",
+      "Label": "",
+      "StartEpoch": 10101,
+      "EndEpoch": 10101,
+      "StoragePricePerEpoch": "0",
+      "ProviderCollateral": "0",
+      "ClientCollateral": "0"
+    },
+    "State": {
+      "SectorStartEpoch": 10101,
+      "LastUpdatedEpoch": 10101,
+      "SlashEpoch": 10101,
+      "VerifiedClaim": 0
+    }
+  }
+]
+```
 
 ### DealsPieceCidBlocklist
 
@@ -550,7 +838,14 @@ Perms: admin
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
+]
+```
 
 ### DealsSetConsiderOfflineRetrievalDeals
 
@@ -644,7 +939,11 @@ Perms: admin
 Inputs:
 ```json
 [
-  null
+  [
+    {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    }
+  ]
 ]
 ```
 
@@ -662,6 +961,37 @@ Inputs: `null`
 
 Response: `"12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"`
 
+## Indexer
+
+
+### IndexerAnnounceAllDeals
+IndexerAnnounceAllDeals informs the indexer nodes aboutall active deals.
+
+
+Perms: admin
+
+Inputs: `null`
+
+Response: `{}`
+
+### IndexerAnnounceDeal
+IndexerAnnounceDeal informs indexer nodes that a new deal was received,
+so they can download its index
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
+]
+```
+
+Response: `{}`
+
 ## Log
 
 
@@ -672,7 +1002,28 @@ Perms: admin
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Type": {
+      "System": "string value",
+      "Subsystem": "string value"
+    },
+    "Active": true,
+    "LastActive": {
+      "Type": "string value",
+      "Message": "json raw message",
+      "Time": "0001-01-01T00:00:00Z"
+    },
+    "LastResolved": {
+      "Type": "string value",
+      "Message": "json raw message",
+      "Time": "0001-01-01T00:00:00Z"
+    }
+  }
+]
+```
 
 ### LogList
 
@@ -681,7 +1032,12 @@ Perms: write
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  "string value"
+]
+```
 
 ### LogSetLevel
 
@@ -718,6 +1074,113 @@ Inputs:
 
 Response: `{}`
 
+### MarketDataTransferDiagnostics
+MarketDataTransferDiagnostics generates debugging information about current data transfers over graphsync
+
+
+Perms: write
+
+Inputs:
+```json
+[
+  "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+]
+```
+
+Response:
+```json
+{
+  "ReceivingTransfers": [
+    {
+      "RequestID": {},
+      "RequestState": "string value",
+      "IsCurrentChannelRequest": true,
+      "ChannelID": {
+        "Initiator": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+        "Responder": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+        "ID": 3
+      },
+      "ChannelState": {
+        "TransferID": 3,
+        "Status": 1,
+        "BaseCID": {
+          "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+        },
+        "IsInitiator": true,
+        "IsSender": true,
+        "Voucher": "string value",
+        "Message": "string value",
+        "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+        "Transferred": 42,
+        "Stages": {
+          "Stages": [
+            {
+              "Name": "string value",
+              "Description": "string value",
+              "CreatedTime": "0001-01-01T00:00:00Z",
+              "UpdatedTime": "0001-01-01T00:00:00Z",
+              "Logs": [
+                {
+                  "Log": "string value",
+                  "UpdatedTime": "0001-01-01T00:00:00Z"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "Diagnostics": [
+        "string value"
+      ]
+    }
+  ],
+  "SendingTransfers": [
+    {
+      "RequestID": {},
+      "RequestState": "string value",
+      "IsCurrentChannelRequest": true,
+      "ChannelID": {
+        "Initiator": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+        "Responder": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+        "ID": 3
+      },
+      "ChannelState": {
+        "TransferID": 3,
+        "Status": 1,
+        "BaseCID": {
+          "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+        },
+        "IsInitiator": true,
+        "IsSender": true,
+        "Voucher": "string value",
+        "Message": "string value",
+        "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+        "Transferred": 42,
+        "Stages": {
+          "Stages": [
+            {
+              "Name": "string value",
+              "Description": "string value",
+              "CreatedTime": "0001-01-01T00:00:00Z",
+              "UpdatedTime": "0001-01-01T00:00:00Z",
+              "Logs": [
+                {
+                  "Log": "string value",
+                  "UpdatedTime": "0001-01-01T00:00:00Z"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "Diagnostics": [
+        "string value"
+      ]
+    }
+  ]
+}
+```
+
 ### MarketDataTransferUpdates
 
 
@@ -740,7 +1203,20 @@ Response:
   "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
   "Transferred": 42,
   "Stages": {
-    "Stages": null
+    "Stages": [
+      {
+        "Name": "string value",
+        "Description": "string value",
+        "CreatedTime": "0001-01-01T00:00:00Z",
+        "UpdatedTime": "0001-01-01T00:00:00Z",
+        "Logs": [
+          {
+            "Log": "string value",
+            "UpdatedTime": "0001-01-01T00:00:00Z"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
@@ -790,7 +1266,7 @@ Response:
     "VerifiedDeal": true,
     "Client": "f01234",
     "Provider": "f01234",
-    "Label": "string value",
+    "Label": "",
     "StartEpoch": 10101,
     "EndEpoch": 10101,
     "StoragePricePerEpoch": "0",
@@ -878,7 +1354,40 @@ Perms: write
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "TransferID": 3,
+    "Status": 1,
+    "BaseCID": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "IsInitiator": true,
+    "IsSender": true,
+    "Voucher": "string value",
+    "Message": "string value",
+    "OtherPeer": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+    "Transferred": 42,
+    "Stages": {
+      "Stages": [
+        {
+          "Name": "string value",
+          "Description": "string value",
+          "CreatedTime": "0001-01-01T00:00:00Z",
+          "UpdatedTime": "0001-01-01T00:00:00Z",
+          "Logs": [
+            {
+              "Log": "string value",
+              "UpdatedTime": "0001-01-01T00:00:00Z"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
+```
 
 ### MarketListDeals
 
@@ -887,7 +1396,34 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Proposal": {
+      "PieceCID": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      "PieceSize": 1032,
+      "VerifiedDeal": true,
+      "Client": "f01234",
+      "Provider": "f01234",
+      "Label": "",
+      "StartEpoch": 10101,
+      "EndEpoch": 10101,
+      "StoragePricePerEpoch": "0",
+      "ProviderCollateral": "0",
+      "ClientCollateral": "0"
+    },
+    "State": {
+      "SectorStartEpoch": 10101,
+      "LastUpdatedEpoch": 10101,
+      "SlashEpoch": 10101,
+      "VerifiedClaim": 0
+    }
+  }
+]
+```
 
 ### MarketListIncompleteDeals
 
@@ -896,7 +1432,65 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Proposal": {
+      "PieceCID": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      "PieceSize": 1032,
+      "VerifiedDeal": true,
+      "Client": "f01234",
+      "Provider": "f01234",
+      "Label": "",
+      "StartEpoch": 10101,
+      "EndEpoch": 10101,
+      "StoragePricePerEpoch": "0",
+      "ProviderCollateral": "0",
+      "ClientCollateral": "0"
+    },
+    "ClientSignature": {
+      "Type": 2,
+      "Data": "Ynl0ZSBhcnJheQ=="
+    },
+    "ProposalCid": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "AddFundsCid": null,
+    "PublishCid": null,
+    "Miner": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+    "Client": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+    "State": 42,
+    "PiecePath": ".lotusminer/fstmp123",
+    "MetadataPath": ".lotusminer/fstmp123",
+    "SlashEpoch": 10101,
+    "FastRetrieval": true,
+    "Message": "string value",
+    "FundsReserved": "0",
+    "Ref": {
+      "TransferType": "string value",
+      "Root": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      "PieceCid": null,
+      "PieceSize": 1024,
+      "RawBlockSize": 42
+    },
+    "AvailableForRetrieval": true,
+    "DealID": 5432,
+    "CreationTime": "0001-01-01T00:00:00Z",
+    "TransferChannelId": {
+      "Initiator": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "Responder": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "ID": 3
+    },
+    "SectorNumber": 9,
+    "InboundCAR": "string value"
+  }
+]
+```
 
 ### MarketListRetrievalDeals
 
@@ -905,7 +1499,51 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "PayloadCID": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "ID": 5,
+    "Selector": {
+      "Raw": "Ynl0ZSBhcnJheQ=="
+    },
+    "PieceCID": null,
+    "PricePerByte": "0",
+    "PaymentInterval": 42,
+    "PaymentIntervalIncrease": 42,
+    "UnsealPrice": "0",
+    "StoreID": 42,
+    "ChannelID": {
+      "Initiator": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "Responder": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+      "ID": 3
+    },
+    "PieceInfo": {
+      "PieceCID": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      "Deals": [
+        {
+          "DealID": 5432,
+          "SectorID": 9,
+          "Offset": 1032,
+          "Length": 1032
+        }
+      ]
+    },
+    "Status": 0,
+    "Receiver": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+    "TotalSent": 42,
+    "FundsReceived": "0",
+    "Message": "string value",
+    "CurrentInterval": 42,
+    "LegacyProtocol": true
+  }
+]
+```
 
 ### MarketPendingDeals
 
@@ -917,7 +1555,29 @@ Inputs: `null`
 Response:
 ```json
 {
-  "Deals": null,
+  "Deals": [
+    {
+      "Proposal": {
+        "PieceCID": {
+          "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+        },
+        "PieceSize": 1032,
+        "VerifiedDeal": true,
+        "Client": "f01234",
+        "Provider": "f01234",
+        "Label": "",
+        "StartEpoch": 10101,
+        "EndEpoch": 10101,
+        "StoragePricePerEpoch": "0",
+        "ProviderCollateral": "0",
+        "ClientCollateral": "0"
+      },
+      "ClientSignature": {
+        "Type": 2,
+        "Data": "Ynl0ZSBhcnJheQ=="
+      }
+    }
+  ],
   "PublishPeriodStart": "0001-01-01T00:00:00Z",
   "PublishPeriod": 60000000000
 }
@@ -944,6 +1604,22 @@ Inputs:
   3,
   "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
   true
+]
+```
+
+Response: `{}`
+
+### MarketRetryPublishDeal
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
 ]
 ```
 
@@ -1019,7 +1695,9 @@ Response:
 ```json
 {
   "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
-  "Addrs": []
+  "Addrs": [
+    "/ip4/52.36.61.156/tcp/1347/p2p/12D3KooWFETiESTf1v4PGUvtnxMAcEFMzLZbJGg4tjWfGEimYior"
+  ]
 }
 ```
 
@@ -1116,9 +1794,15 @@ Inputs:
 ```json
 [
   {
-    "Peers": null,
-    "IPAddrs": null,
-    "IPSubnets": null
+    "Peers": [
+      "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+    ],
+    "IPAddrs": [
+      "string value"
+    ],
+    "IPSubnets": [
+      "string value"
+    ]
   }
 ]
 ```
@@ -1135,9 +1819,15 @@ Inputs: `null`
 Response:
 ```json
 {
-  "Peers": null,
-  "IPAddrs": null,
-  "IPSubnets": null
+  "Peers": [
+    "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+  ],
+  "IPAddrs": [
+    "string value"
+  ],
+  "IPSubnets": [
+    "string value"
+  ]
 }
 ```
 
@@ -1150,9 +1840,15 @@ Inputs:
 ```json
 [
   {
-    "Peers": null,
-    "IPAddrs": null,
-    "IPSubnets": null
+    "Peers": [
+      "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+    ],
+    "IPAddrs": [
+      "string value"
+    ],
+    "IPSubnets": [
+      "string value"
+    ]
   }
 ]
 ```
@@ -1169,7 +1865,9 @@ Inputs:
 [
   {
     "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
-    "Addrs": []
+    "Addrs": [
+      "/ip4/52.36.61.156/tcp/1347/p2p/12D3KooWFETiESTf1v4PGUvtnxMAcEFMzLZbJGg4tjWfGEimYior"
+    ]
   }
 ]
 ```
@@ -1220,7 +1918,35 @@ Response:
 ```json
 {
   "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
-  "Addrs": []
+  "Addrs": [
+    "/ip4/52.36.61.156/tcp/1347/p2p/12D3KooWFETiESTf1v4PGUvtnxMAcEFMzLZbJGg4tjWfGEimYior"
+  ]
+}
+```
+
+### NetLimit
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "string value"
+]
+```
+
+Response:
+```json
+{
+  "Memory": 123,
+  "Streams": 3,
+  "StreamsInbound": 1,
+  "StreamsOutbound": 2,
+  "Conns": 4,
+  "ConnsInbound": 3,
+  "ConnsOutbound": 4,
+  "FD": 5
 }
 ```
 
@@ -1241,8 +1967,12 @@ Response:
 {
   "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
   "Agent": "string value",
-  "Addrs": null,
-  "Protocols": null,
+  "Addrs": [
+    "string value"
+  ],
+  "Protocols": [
+    "string value"
+  ],
   "ConnMgrMeta": {
     "FirstSeen": "0001-01-01T00:00:00Z",
     "Value": 123,
@@ -1263,7 +1993,77 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+    "Addrs": [
+      "/ip4/52.36.61.156/tcp/1347/p2p/12D3KooWFETiESTf1v4PGUvtnxMAcEFMzLZbJGg4tjWfGEimYior"
+    ]
+  }
+]
+```
+
+### NetPing
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+]
+```
+
+Response: `60000000000`
+
+### NetProtectAdd
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  [
+    "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+  ]
+]
+```
+
+Response: `{}`
+
+### NetProtectList
+
+
+Perms: read
+
+Inputs: `null`
+
+Response:
+```json
+[
+  "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+]
+```
+
+### NetProtectRemove
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  [
+    "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+  ]
+]
+```
+
+Response: `{}`
 
 ### NetPubsubScores
 
@@ -1272,7 +2072,116 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "ID": "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf",
+    "Score": {
+      "Score": 12.3,
+      "Topics": {
+        "/blocks": {
+          "TimeInMesh": 60000000000,
+          "FirstMessageDeliveries": 122,
+          "MeshMessageDeliveries": 1234,
+          "InvalidMessageDeliveries": 3
+        }
+      },
+      "AppSpecificScore": 12.3,
+      "IPColocationFactor": 12.3,
+      "BehaviourPenalty": 12.3
+    }
+  }
+]
+```
+
+### NetSetLimit
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "string value",
+  {
+    "Memory": 123,
+    "Streams": 3,
+    "StreamsInbound": 1,
+    "StreamsOutbound": 2,
+    "Conns": 4,
+    "ConnsInbound": 3,
+    "ConnsOutbound": 4,
+    "FD": 5
+  }
+]
+```
+
+Response: `{}`
+
+### NetStat
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "string value"
+]
+```
+
+Response:
+```json
+{
+  "System": {
+    "NumStreamsInbound": 123,
+    "NumStreamsOutbound": 123,
+    "NumConnsInbound": 123,
+    "NumConnsOutbound": 123,
+    "NumFD": 123,
+    "Memory": 9
+  },
+  "Transient": {
+    "NumStreamsInbound": 123,
+    "NumStreamsOutbound": 123,
+    "NumConnsInbound": 123,
+    "NumConnsOutbound": 123,
+    "NumFD": 123,
+    "Memory": 9
+  },
+  "Services": {
+    "abc": {
+      "NumStreamsInbound": 1,
+      "NumStreamsOutbound": 2,
+      "NumConnsInbound": 3,
+      "NumConnsOutbound": 4,
+      "NumFD": 5,
+      "Memory": 123
+    }
+  },
+  "Protocols": {
+    "abc": {
+      "NumStreamsInbound": 1,
+      "NumStreamsOutbound": 2,
+      "NumConnsInbound": 3,
+      "NumConnsOutbound": 4,
+      "NumFD": 5,
+      "Memory": 123
+    }
+  },
+  "Peers": {
+    "abc": {
+      "NumStreamsInbound": 1,
+      "NumStreamsOutbound": 2,
+      "NumConnsInbound": 3,
+      "NumConnsOutbound": 4,
+      "NumFD": 5,
+      "Memory": 123
+    }
+  }
+}
+```
 
 ## Pieces
 
@@ -1297,7 +2206,15 @@ Response:
   "CID": {
     "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
   },
-  "PieceBlockLocations": null
+  "PieceBlockLocations": [
+    {
+      "RelOffset": 42,
+      "BlockSize": 42,
+      "PieceCID": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      }
+    }
+  ]
 }
 ```
 
@@ -1321,7 +2238,14 @@ Response:
   "PieceCID": {
     "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
   },
-  "Deals": null
+  "Deals": [
+    {
+      "DealID": 5432,
+      "SectorID": 9,
+      "Offset": 1032,
+      "Length": 1032
+    }
+  ]
 }
 ```
 
@@ -1332,7 +2256,14 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
+]
+```
 
 ### PiecesListPieces
 
@@ -1341,7 +2272,14 @@ Perms: read
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
+]
+```
 
 ## Pledge
 
@@ -1362,10 +2300,70 @@ Response:
 }
 ```
 
+## Recover
+
+
+### RecoverFault
+RecoverFault can be used to declare recoveries manually. It sends messages
+to the miner actor with details of recovered sectors and returns the CID of messages. It honors the
+maxPartitionsPerRecoveryMessage from the config
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  [
+    123,
+    124
+  ]
+]
+```
+
+Response:
+```json
+[
+  {
+    "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+  }
+]
+```
+
 ## Return
 
 
 ### ReturnAddPiece
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "Sector": {
+      "Miner": 1000,
+      "Number": 9
+    },
+    "ID": "07070707-0707-0707-0707-070707070707"
+  },
+  {
+    "Size": 1032,
+    "PieceCID": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    }
+  },
+  {
+    "Code": 0,
+    "Message": "string value"
+  }
+]
+```
+
+Response: `{}`
+
+### ReturnDataCid
 storiface.WorkerReturn
 
 
@@ -1396,7 +2394,55 @@ Inputs:
 
 Response: `{}`
 
+### ReturnDownloadSector
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "Sector": {
+      "Miner": 1000,
+      "Number": 9
+    },
+    "ID": "07070707-0707-0707-0707-070707070707"
+  },
+  {
+    "Code": 0,
+    "Message": "string value"
+  }
+]
+```
+
+Response: `{}`
+
 ### ReturnFetch
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "Sector": {
+      "Miner": 1000,
+      "Number": 9
+    },
+    "ID": "07070707-0707-0707-0707-070707070707"
+  },
+  {
+    "Code": 0,
+    "Message": "string value"
+  }
+]
+```
+
+Response: `{}`
+
+### ReturnFinalizeReplicaUpdate
 
 
 Perms: admin
@@ -1444,6 +2490,30 @@ Inputs:
 
 Response: `{}`
 
+### ReturnGenerateSectorKeyFromData
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "Sector": {
+      "Miner": 1000,
+      "Number": 9
+    },
+    "ID": "07070707-0707-0707-0707-070707070707"
+  },
+  {
+    "Code": 0,
+    "Message": "string value"
+  }
+]
+```
+
+Response: `{}`
+
 ### ReturnMoveStorage
 
 
@@ -1459,6 +2529,58 @@ Inputs:
     },
     "ID": "07070707-0707-0707-0707-070707070707"
   },
+  {
+    "Code": 0,
+    "Message": "string value"
+  }
+]
+```
+
+Response: `{}`
+
+### ReturnProveReplicaUpdate1
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "Sector": {
+      "Miner": 1000,
+      "Number": 9
+    },
+    "ID": "07070707-0707-0707-0707-070707070707"
+  },
+  [
+    "Ynl0ZSBhcnJheQ=="
+  ],
+  {
+    "Code": 0,
+    "Message": "string value"
+  }
+]
+```
+
+Response: `{}`
+
+### ReturnProveReplicaUpdate2
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "Sector": {
+      "Miner": 1000,
+      "Number": 9
+    },
+    "ID": "07070707-0707-0707-0707-070707070707"
+  },
+  "Bw==",
   {
     "Code": 0,
     "Message": "string value"
@@ -1517,6 +2639,38 @@ Inputs:
 
 Response: `{}`
 
+### ReturnReplicaUpdate
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "Sector": {
+      "Miner": 1000,
+      "Number": 9
+    },
+    "ID": "07070707-0707-0707-0707-070707070707"
+  },
+  {
+    "NewSealed": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    },
+    "NewUnsealed": {
+      "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+    }
+  },
+  {
+    "Code": 0,
+    "Message": "string value"
+  }
+]
+```
+
+Response: `{}`
+
 ### ReturnSealCommit1
 
 
@@ -1532,7 +2686,7 @@ Inputs:
     },
     "ID": "07070707-0707-0707-0707-070707070707"
   },
-  null,
+  "Bw==",
   {
     "Code": 0,
     "Message": "string value"
@@ -1557,7 +2711,7 @@ Inputs:
     },
     "ID": "07070707-0707-0707-0707-070707070707"
   },
-  null,
+  "Bw==",
   {
     "Code": 0,
     "Message": "string value"
@@ -1582,7 +2736,7 @@ Inputs:
     },
     "ID": "07070707-0707-0707-0707-070707070707"
   },
-  null,
+  "Bw==",
   {
     "Code": 0,
     "Message": "string value"
@@ -1693,6 +2847,21 @@ Inputs:
 
 Response: `{}`
 
+### SealingRemoveRequest
+SealingSchedRemove removes a request from sealing pipeline
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "07070707-0707-0707-0707-070707070707"
+]
+```
+
+Response: `{}`
+
 ### SealingSchedDiag
 SealingSchedDiag dumps internal sealing scheduler state
 
@@ -1710,6 +2879,21 @@ Response: `{}`
 
 ## Sector
 
+
+### SectorAbortUpgrade
+SectorAbortUpgrade can be called on sectors that are in the process of being upgraded to abort it
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  9
+]
+```
+
+Response: `{}`
 
 ### SectorAddPieceToAny
 Add piece to an open sector. If no sectors with enough space are open,
@@ -1735,7 +2919,7 @@ Inputs:
       "VerifiedDeal": true,
       "Client": "f01234",
       "Provider": "f01234",
-      "Label": "string value",
+      "Label": "",
       "StartEpoch": 10101,
       "EndEpoch": 10101,
       "StoragePricePerEpoch": "0",
@@ -1768,7 +2952,22 @@ Perms: admin
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Sectors": [
+      123,
+      124
+    ],
+    "FailedSectors": {
+      "123": "can't acquire read lock"
+    },
+    "Msg": null,
+    "Error": "string value"
+  }
+]
+```
 
 ### SectorCommitPending
 SectorCommitPending returns a list of pending Commit sectors to be sent in the next aggregate message
@@ -1778,7 +2977,15 @@ Perms: admin
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Miner": 1000,
+    "Number": 9
+  }
+]
+```
 
 ### SectorGetExpectedSealDuration
 SectorGetExpectedSealDuration gets the expected time for a sector to seal
@@ -1809,11 +3016,129 @@ Perms: admin
 Inputs:
 ```json
 [
-  9
+  9,
+  true
 ]
 ```
 
 Response: `{}`
+
+### SectorMatchPendingPiecesToOpenSectors
+
+
+Perms: admin
+
+Inputs: `null`
+
+Response: `{}`
+
+### SectorNumAssignerMeta
+SectorNumAssignerMeta returns sector number assigner metadata - reserved/allocated
+
+
+Perms: read
+
+Inputs: `null`
+
+Response:
+```json
+{
+  "Reserved": [
+    5,
+    1
+  ],
+  "Allocated": [
+    5,
+    1
+  ],
+  "InUse": [
+    5,
+    1
+  ],
+  "Next": 9
+}
+```
+
+### SectorNumFree
+SectorNumFree drops a sector reservation
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "string value"
+]
+```
+
+Response: `{}`
+
+### SectorNumReservations
+SectorNumReservations returns a list of sector number reservations
+
+
+Perms: read
+
+Inputs: `null`
+
+Response:
+```json
+{
+  "": [
+    5,
+    3,
+    2,
+    1
+  ]
+}
+```
+
+### SectorNumReserve
+SectorNumReserve creates a new sector number reservation. Will fail if any other reservation has colliding
+numbers or name. Set force to true to override safety checks.
+Valid characters for name: a-z, A-Z, 0-9, _, -
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "string value",
+  [
+    5,
+    1
+  ],
+  true
+]
+```
+
+Response: `{}`
+
+### SectorNumReserveCount
+SectorNumReserveCount creates a new sector number reservation for `count` sector numbers.
+by default lotus will allocate lowest-available sector numbers to the reservation.
+For restrictions on `name` see SectorNumReserve
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "string value",
+  42
+]
+```
+
+Response:
+```json
+[
+  5,
+  1
+]
+```
 
 ### SectorPreCommitFlush
 SectorPreCommitFlush immediately sends a PreCommit message with sectors batched for PreCommit.
@@ -1824,7 +3149,19 @@ Perms: admin
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Sectors": [
+      123,
+      124
+    ],
+    "Msg": null,
+    "Error": "string value"
+  }
+]
+```
 
 ### SectorPreCommitPending
 SectorPreCommitPending returns a list of pending PreCommit sectors to be sent in the next batch message
@@ -1834,7 +3171,143 @@ Perms: admin
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Miner": 1000,
+    "Number": 9
+  }
+]
+```
+
+### SectorReceive
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  {
+    "State": "Proving",
+    "Sector": {
+      "Miner": 1000,
+      "Number": 9
+    },
+    "Type": 8,
+    "Pieces": [
+      {
+        "Piece": {
+          "Size": 1032,
+          "PieceCID": {
+            "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+          }
+        },
+        "DealInfo": {
+          "PublishCid": null,
+          "DealID": 5432,
+          "DealProposal": {
+            "PieceCID": {
+              "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+            },
+            "PieceSize": 1032,
+            "VerifiedDeal": true,
+            "Client": "f01234",
+            "Provider": "f01234",
+            "Label": "",
+            "StartEpoch": 10101,
+            "EndEpoch": 10101,
+            "StoragePricePerEpoch": "0",
+            "ProviderCollateral": "0",
+            "ClientCollateral": "0"
+          },
+          "DealSchedule": {
+            "StartEpoch": 10101,
+            "EndEpoch": 10101
+          },
+          "KeepUnsealed": true
+        }
+      }
+    ],
+    "TicketValue": "Bw==",
+    "TicketEpoch": 10101,
+    "PreCommit1Out": "Bw==",
+    "CommD": null,
+    "CommR": null,
+    "PreCommitInfo": {
+      "SealProof": 8,
+      "SectorNumber": 9,
+      "SealedCID": {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      "SealRandEpoch": 10101,
+      "DealIDs": [
+        5432
+      ],
+      "Expiration": 10101,
+      "UnsealedCid": null
+    },
+    "PreCommitDeposit": "0",
+    "PreCommitMessage": null,
+    "PreCommitTipSet": [
+      {
+        "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+      },
+      {
+        "/": "bafy2bzacebp3shtrn43k7g3unredz7fxn4gj533d3o43tqn2p2ipxxhrvchve"
+      }
+    ],
+    "SeedValue": "Bw==",
+    "SeedEpoch": 10101,
+    "CommitProof": "Ynl0ZSBhcnJheQ==",
+    "CommitMessage": null,
+    "Log": [
+      {
+        "Kind": "string value",
+        "Timestamp": 42,
+        "Trace": "string value",
+        "Message": "string value"
+      }
+    ],
+    "DataUnsealed": {
+      "Local": true,
+      "URL": "string value",
+      "Headers": [
+        {
+          "Key": "string value",
+          "Value": "string value"
+        }
+      ]
+    },
+    "DataSealed": {
+      "Local": true,
+      "URL": "string value",
+      "Headers": [
+        {
+          "Key": "string value",
+          "Value": "string value"
+        }
+      ]
+    },
+    "DataCache": {
+      "Local": true,
+      "URL": "string value",
+      "Headers": [
+        {
+          "Key": "string value",
+          "Value": "string value"
+        }
+      ]
+    },
+    "RemoteCommit1Endpoint": "string value",
+    "RemoteCommit2Endpoint": "string value",
+    "RemoteSealingDoneEndpoint": "string value"
+  }
+]
+```
+
+Response: `{}`
 
 ### SectorRemove
 SectorRemove removes the sector from storage. It doesn't terminate it on-chain, which can
@@ -1934,7 +3407,15 @@ Perms: admin
 
 Inputs: `null`
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "Miner": 1000,
+    "Number": 9
+  }
+]
+```
 
 ## Sectors
 
@@ -1964,7 +3445,9 @@ Perms: read
 Inputs:
 ```json
 [
-  null
+  [
+    "Proving"
+  ]
 ]
 ```
 
@@ -2018,22 +3501,65 @@ Response:
   "CommD": null,
   "CommR": null,
   "Proof": "Ynl0ZSBhcnJheQ==",
-  "Deals": null,
-  "Pieces": null,
+  "Deals": [
+    5432
+  ],
+  "Pieces": [
+    {
+      "Piece": {
+        "Size": 1032,
+        "PieceCID": {
+          "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+        }
+      },
+      "DealInfo": {
+        "PublishCid": null,
+        "DealID": 5432,
+        "DealProposal": {
+          "PieceCID": {
+            "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
+          },
+          "PieceSize": 1032,
+          "VerifiedDeal": true,
+          "Client": "f01234",
+          "Provider": "f01234",
+          "Label": "",
+          "StartEpoch": 10101,
+          "EndEpoch": 10101,
+          "StoragePricePerEpoch": "0",
+          "ProviderCollateral": "0",
+          "ClientCollateral": "0"
+        },
+        "DealSchedule": {
+          "StartEpoch": 10101,
+          "EndEpoch": 10101
+        },
+        "KeepUnsealed": true
+      }
+    }
+  ],
   "Ticket": {
-    "Value": null,
+    "Value": "Bw==",
     "Epoch": 10101
   },
   "Seed": {
-    "Value": null,
+    "Value": "Bw==",
     "Epoch": 10101
   },
   "PreCommitMsg": null,
   "CommitMsg": null,
   "Retries": 42,
   "ToUpgrade": true,
+  "ReplicaUpdateMessage": null,
   "LastErr": "string value",
-  "Log": null,
+  "Log": [
+    {
+      "Kind": "string value",
+      "Timestamp": 42,
+      "Trace": "string value",
+      "Message": "string value"
+    }
+  ],
   "SealProof": 8,
   "Activation": 10101,
   "Expiration": 10101,
@@ -2077,7 +3603,7 @@ Inputs:
   },
   1040384,
   1024,
-  null,
+  "Bw==",
   null
 ]
 ```
@@ -2099,6 +3625,18 @@ Inputs:
 
 Response: `{}`
 
+## Start
+
+
+### StartTime
+
+
+Perms: read
+
+Inputs: `null`
+
+Response: `"0001-01-01T00:00:00Z"`
+
 ## Storage
 
 
@@ -2117,7 +3655,7 @@ Inputs:
 Response: `{}`
 
 ### StorageAttach
-stores.SectorIndex
+paths.SectorIndex
 
 
 Perms: admin
@@ -2127,11 +3665,25 @@ Inputs:
 [
   {
     "ID": "76f1988b-ef30-4d7e-b3ec-9a627f4ba5a8",
-    "URLs": null,
+    "URLs": [
+      "string value"
+    ],
     "Weight": 42,
     "MaxStorage": 42,
     "CanSeal": true,
-    "CanStore": true
+    "CanStore": true,
+    "Groups": [
+      "string value"
+    ],
+    "AllowTo": [
+      "string value"
+    ],
+    "AllowTypes": [
+      "string value"
+    ],
+    "DenyTypes": [
+      "string value"
+    ]
   },
   {
     "Capacity": 9,
@@ -2146,7 +3698,29 @@ Inputs:
 
 Response: `{}`
 
+### StorageAuthVerify
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "string value"
+]
+```
+
+Response:
+```json
+[
+  "write"
+]
+```
+
 ### StorageBestAlloc
+StorageBestAlloc returns list of paths where sector files of the specified type can be allocated, ordered by preference.
+Paths with more weight and more % of free space are preferred.
+Note: This method doesn't filter paths based on AllowTypes/DenyTypes.
 
 
 Perms: admin
@@ -2160,7 +3734,33 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "ID": "76f1988b-ef30-4d7e-b3ec-9a627f4ba5a8",
+    "URLs": [
+      "string value"
+    ],
+    "Weight": 42,
+    "MaxStorage": 42,
+    "CanSeal": true,
+    "CanStore": true,
+    "Groups": [
+      "string value"
+    ],
+    "AllowTo": [
+      "string value"
+    ],
+    "AllowTypes": [
+      "string value"
+    ],
+    "DenyTypes": [
+      "string value"
+    ]
+  }
+]
+```
 
 ### StorageDeclareSector
 
@@ -2177,6 +3777,35 @@ Inputs:
   },
   1,
   true
+]
+```
+
+Response: `{}`
+
+### StorageDetach
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "76f1988b-ef30-4d7e-b3ec-9a627f4ba5a8",
+  "string value"
+]
+```
+
+Response: `{}`
+
+### StorageDetachLocal
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "string value"
 ]
 ```
 
@@ -2202,6 +3831,14 @@ Inputs:
 Response: `{}`
 
 ### StorageFindSector
+StorageFindSector returns list of paths where the specified sector files exist.
+
+If allowFetch is set, list of paths to which the sector can be fetched will also be returned.
+- Paths which have sector files locally (don't require fetching) will be listed first.
+- Paths which have sector files locally will not be filtered based on based on AllowTypes/DenyTypes.
+- Paths which require fetching will be filtered based on AllowTypes/DenyTypes. If multiple
+  file types are specified, each type will be considered individually, and a union of all paths
+  which can accommodate each file type will be returned.
 
 
 Perms: admin
@@ -2219,7 +3856,65 @@ Inputs:
 ]
 ```
 
-Response: `null`
+Response:
+```json
+[
+  {
+    "ID": "76f1988b-ef30-4d7e-b3ec-9a627f4ba5a8",
+    "URLs": [
+      "string value"
+    ],
+    "BaseURLs": [
+      "string value"
+    ],
+    "Weight": 42,
+    "CanSeal": true,
+    "CanStore": true,
+    "Primary": true,
+    "AllowTypes": [
+      "string value"
+    ],
+    "DenyTypes": [
+      "string value"
+    ]
+  }
+]
+```
+
+### StorageGetLocks
+
+
+Perms: admin
+
+Inputs: `null`
+
+Response:
+```json
+{
+  "Locks": [
+    {
+      "Sector": {
+        "Miner": 1000,
+        "Number": 123
+      },
+      "Write": [
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      "Read": [
+        2,
+        3,
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}
+```
 
 ### StorageInfo
 
@@ -2237,11 +3932,25 @@ Response:
 ```json
 {
   "ID": "76f1988b-ef30-4d7e-b3ec-9a627f4ba5a8",
-  "URLs": null,
+  "URLs": [
+    "string value"
+  ],
   "Weight": 42,
   "MaxStorage": 42,
   "CanSeal": true,
-  "CanStore": true
+  "CanStore": true,
+  "Groups": [
+    "string value"
+  ],
+  "AllowTo": [
+    "string value"
+  ],
+  "AllowTypes": [
+    "string value"
+  ],
+  "DenyTypes": [
+    "string value"
+  ]
 }
 ```
 
@@ -2293,6 +4002,21 @@ Inputs:
   },
   1,
   1
+]
+```
+
+Response: `{}`
+
+### StorageRedeclareLocal
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  "1399aa04-2625-44b1-bad4-bd07b59b22c4",
+  true
 ]
 ```
 
@@ -2432,19 +4156,1312 @@ Response:
       "IgnoreResources": false,
       "Resources": {
         "MemPhysical": 274877906944,
+        "MemUsed": 2147483648,
         "MemSwap": 128849018880,
-        "MemReserved": 2147483648,
+        "MemSwapUsed": 2147483648,
         "CPUs": 64,
         "GPUs": [
           "aGPU 1337"
-        ]
+        ],
+        "Resources": {
+          "post/v0/windowproof": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1610612736,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10737418240,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 32212254720,
+              "MaxMemory": 103079215104,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 34359738368,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 64424509440,
+              "MaxMemory": 128849018880,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 68719476736,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1610612736,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10737418240,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 32212254720,
+              "MaxMemory": 103079215104,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 34359738368,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 64424509440,
+              "MaxMemory": 128849018880,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 68719476736,
+              "MaxConcurrent": 0
+            }
+          },
+          "post/v0/winningproof": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10737418240,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 34359738368,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 68719476736,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10737418240,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 34359738368,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 68719476736,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/addpiece": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 8589934592,
+              "MaxMemory": 8589934592,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 8589934592,
+              "MaxMemory": 8589934592,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/commit/1": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/commit/2": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1610612736,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10737418240,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 32212254720,
+              "MaxMemory": 161061273600,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 34359738368,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 64424509440,
+              "MaxMemory": 204010946560,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 68719476736,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1610612736,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10737418240,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 32212254720,
+              "MaxMemory": 161061273600,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 34359738368,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 64424509440,
+              "MaxMemory": 204010946560,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 68719476736,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/datacid": {
+            "0": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/fetch": {
+            "0": {
+              "MinMemory": 1048576,
+              "MaxMemory": 1048576,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 0,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 1048576,
+              "MaxMemory": 1048576,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 0,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 1048576,
+              "MaxMemory": 1048576,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 0,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 1048576,
+              "MaxMemory": 1048576,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 0,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 1048576,
+              "MaxMemory": 1048576,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 0,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 1048576,
+              "MaxMemory": 1048576,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 0,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 1048576,
+              "MaxMemory": 1048576,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 0,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 1048576,
+              "MaxMemory": 1048576,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 0,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 1048576,
+              "MaxMemory": 1048576,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 0,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 1048576,
+              "MaxMemory": 1048576,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 0,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/precommit/1": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 805306368,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1048576,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 60129542144,
+              "MaxMemory": 68719476736,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10485760,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 120259084288,
+              "MaxMemory": 137438953472,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10485760,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 805306368,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1048576,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 60129542144,
+              "MaxMemory": 68719476736,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10485760,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 120259084288,
+              "MaxMemory": 137438953472,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10485760,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/precommit/2": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1610612736,
+              "GPUUtilization": 0,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 16106127360,
+              "MaxMemory": 16106127360,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 32212254720,
+              "MaxMemory": 32212254720,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1610612736,
+              "GPUUtilization": 0,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 16106127360,
+              "MaxMemory": 16106127360,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 32212254720,
+              "MaxMemory": 32212254720,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/provereplicaupdate/1": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 0,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/provereplicaupdate/2": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1610612736,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10737418240,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 32212254720,
+              "MaxMemory": 161061273600,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 34359738368,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 64424509440,
+              "MaxMemory": 204010946560,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 68719476736,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1610612736,
+              "GPUUtilization": 1,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10737418240,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 32212254720,
+              "MaxMemory": 161061273600,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 34359738368,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 64424509440,
+              "MaxMemory": 204010946560,
+              "GPUUtilization": 1,
+              "MaxParallelism": -1,
+              "MaxParallelismGPU": 6,
+              "BaseMinMemory": 68719476736,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/regensectorkey": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 8589934592,
+              "MaxMemory": 8589934592,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 8589934592,
+              "MaxMemory": 8589934592,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/replicaupdate": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 8589934592,
+              "MaxMemory": 8589934592,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 1073741824,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 4294967296,
+              "MaxMemory": 4294967296,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 8589934592,
+              "MaxMemory": 8589934592,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1073741824,
+              "MaxConcurrent": 0
+            }
+          },
+          "seal/v0/unseal": {
+            "0": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "1": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "2": {
+              "MinMemory": 805306368,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1048576,
+              "MaxConcurrent": 0
+            },
+            "3": {
+              "MinMemory": 60129542144,
+              "MaxMemory": 68719476736,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10485760,
+              "MaxConcurrent": 0
+            },
+            "4": {
+              "MinMemory": 120259084288,
+              "MaxMemory": 137438953472,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10485760,
+              "MaxConcurrent": 0
+            },
+            "5": {
+              "MinMemory": 2048,
+              "MaxMemory": 2048,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 2048,
+              "MaxConcurrent": 0
+            },
+            "6": {
+              "MinMemory": 8388608,
+              "MaxMemory": 8388608,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 8388608,
+              "MaxConcurrent": 0
+            },
+            "7": {
+              "MinMemory": 805306368,
+              "MaxMemory": 1073741824,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 1048576,
+              "MaxConcurrent": 0
+            },
+            "8": {
+              "MinMemory": 60129542144,
+              "MaxMemory": 68719476736,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10485760,
+              "MaxConcurrent": 0
+            },
+            "9": {
+              "MinMemory": 120259084288,
+              "MaxMemory": 137438953472,
+              "GPUUtilization": 0,
+              "MaxParallelism": 1,
+              "MaxParallelismGPU": 0,
+              "BaseMinMemory": 10485760,
+              "MaxConcurrent": 0
+            }
+          }
+        }
       }
     },
+    "Tasks": null,
     "Enabled": true,
     "MemUsedMin": 0,
     "MemUsedMax": 0,
-    "GpuUsed": false,
-    "CpuUse": 0
+    "GpuUsed": 0,
+    "CpuUse": 0,
+    "TaskCounts": null
   }
 }
 ```

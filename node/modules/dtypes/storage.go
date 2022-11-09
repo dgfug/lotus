@@ -1,15 +1,16 @@
 package dtypes
 
 import (
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-statestore"
 	bserv "github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-graphsync"
 	exchange "github.com/ipfs/go-ipfs-exchange-interface"
 
+	datatransfer "github.com/filecoin-project/go-data-transfer"
+	dtnet "github.com/filecoin-project/go-data-transfer/network"
 	"github.com/filecoin-project/go-fil-markets/piecestore"
 	"github.com/filecoin-project/go-fil-markets/storagemarket/impl/requestvalidation"
+	"github.com/filecoin-project/go-statestore"
 
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/node/repo/imports"
@@ -85,6 +86,7 @@ type ProviderRequestValidator *requestvalidation.UnifiedRequestValidator
 
 // ProviderDataTransfer is a data transfer manager for the provider
 type ProviderDataTransfer datatransfer.Manager
-
+type ProviderTransferNetwork dtnet.DataTransferNetwork
+type ProviderTransport datatransfer.Transport
 type StagingBlockstore blockstore.BasicBlockstore
 type StagingGraphsync graphsync.GraphExchange

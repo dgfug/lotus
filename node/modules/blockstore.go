@@ -37,6 +37,10 @@ func UniversalBlockstore(lc fx.Lifecycle, mctx helpers.MetricsCtx, r repo.Locked
 	return bs, err
 }
 
+func MemoryBlockstore() dtypes.UniversalBlockstore {
+	return blockstore.NewMemory()
+}
+
 func DiscardColdBlockstore(lc fx.Lifecycle, bs dtypes.UniversalBlockstore) (dtypes.ColdBlockstore, error) {
 	return blockstore.NewDiscardStore(bs), nil
 }
@@ -80,6 +84,7 @@ func SplitBlockstore(cfg *config.Chainstore) func(lc fx.Lifecycle, r repo.Locked
 		cfg := &splitstore.Config{
 			MarkSetType:              cfg.Splitstore.MarkSetType,
 			DiscardColdBlocks:        cfg.Splitstore.ColdStoreType == "discard",
+			UniversalColdBlocks:      cfg.Splitstore.ColdStoreType == "universal",
 			HotStoreMessageRetention: cfg.Splitstore.HotStoreMessageRetention,
 			HotStoreFullGCFrequency:  cfg.Splitstore.HotStoreFullGCFrequency,
 		}

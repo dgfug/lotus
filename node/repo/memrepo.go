@@ -17,9 +17,9 @@ import (
 
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
-	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
 	"github.com/filecoin-project/lotus/node/config"
+	"github.com/filecoin-project/lotus/storage/sealer/fsutil"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 type MemRepo struct {
@@ -36,8 +36,8 @@ type MemRepo struct {
 	keystore   map[string]types.KeyInfo
 	blockstore blockstore.Blockstore
 
-	// given a repo type, produce the default config
-	configF func(t RepoType) interface{}
+	sc      *storiface.StorageConfig
+	tempDir string
 
 	// holds the current config value
 	config struct {
@@ -51,33 +51,35 @@ type lockedMemRepo struct {
 	t   RepoType
 	sync.RWMutex
 
-	tempDir string
-	token   *byte
-	sc      *stores.StorageConfig
+	token *byte
 }
 
-func (lmem *lockedMemRepo) GetStorage() (stores.StorageConfig, error) {
+func (lmem *lockedMemRepo) RepoType() RepoType {
+	return lmem.t
+}
+
+func (lmem *lockedMemRepo) GetStorage() (storiface.StorageConfig, error) {
 	if err := lmem.checkToken(); err != nil {
-		return stores.StorageConfig{}, err
+		return storiface.StorageConfig{}, err
 	}
 
-	if lmem.sc == nil {
-		lmem.sc = &stores.StorageConfig{StoragePaths: []stores.LocalPath{
+	if lmem.mem.sc == nil {
+		lmem.mem.sc = &storiface.StorageConfig{StoragePaths: []storiface.LocalPath{
 			{Path: lmem.Path()},
 		}}
 	}
 
-	return *lmem.sc, nil
+	return *lmem.mem.sc, nil
 }
 
-func (lmem *lockedMemRepo) SetStorage(c func(*stores.StorageConfig)) error {
+func (lmem *lockedMemRepo) SetStorage(c func(*storiface.StorageConfig)) error {
 	if err := lmem.checkToken(); err != nil {
 		return err
 	}
 
 	_, _ = lmem.GetStorage()
 
-	c(lmem.sc)
+	c(lmem.mem.sc)
 	return nil
 }
 
@@ -97,8 +99,8 @@ func (lmem *lockedMemRepo) Path() string {
 	lmem.Lock()
 	defer lmem.Unlock()
 
-	if lmem.tempDir != "" {
-		return lmem.tempDir
+	if lmem.mem.tempDir != "" {
+		return lmem.mem.tempDir
 	}
 
 	t, err := ioutil.TempDir(os.TempDir(), "lotus-memrepo-temp-")
@@ -106,37 +108,43 @@ func (lmem *lockedMemRepo) Path() string {
 		panic(err) // only used in tests, probably fine
 	}
 
-	if lmem.t == StorageMiner {
+	if _, ok := lmem.t.(SupportsStagingDeals); ok {
 		// this is required due to the method makeDealStaging from cmd/lotus-storage-miner/init.go
 		// deal-staging is the directory deal files are staged in before being sealed into sectors
 		// for offline deal flow.
 		if err := os.MkdirAll(filepath.Join(t, "deal-staging"), 0755); err != nil {
 			panic(err)
 		}
-		if err := config.WriteStorageFile(filepath.Join(t, fsStorageConfig), stores.StorageConfig{
-			StoragePaths: []stores.LocalPath{
-				{Path: t},
-			}}); err != nil {
-			panic(err)
-		}
-
-		b, err := json.MarshalIndent(&stores.LocalStorageMeta{
-			ID:       stores.ID(uuid.New().String()),
-			Weight:   10,
-			CanSeal:  true,
-			CanStore: true,
-		}, "", "  ")
-		if err != nil {
-			panic(err)
-		}
-
-		if err := ioutil.WriteFile(filepath.Join(t, "sectorstore.json"), b, 0644); err != nil {
-			panic(err)
-		}
+	}
+	if lmem.t == StorageMiner || lmem.t == Worker {
+		lmem.initSectorStore(t)
 	}
 
-	lmem.tempDir = t
+	lmem.mem.tempDir = t
 	return t
+}
+
+func (lmem *lockedMemRepo) initSectorStore(t string) {
+	if err := config.WriteStorageFile(filepath.Join(t, fsStorageConfig), storiface.StorageConfig{
+		StoragePaths: []storiface.LocalPath{
+			{Path: t},
+		}}); err != nil {
+		panic(err)
+	}
+
+	b, err := json.MarshalIndent(&storiface.LocalStorageMeta{
+		ID:       storiface.ID(uuid.New().String()),
+		Weight:   10,
+		CanSeal:  true,
+		CanStore: true,
+	}, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+
+	if err := ioutil.WriteFile(filepath.Join(t, "sectorstore.json"), b, 0644); err != nil {
+		panic(err)
+	}
 }
 
 var _ Repo = &MemRepo{}
@@ -144,7 +152,6 @@ var _ Repo = &MemRepo{}
 // MemRepoOptions contains options for memory repo
 type MemRepoOptions struct {
 	Ds       datastore.Datastore
-	ConfigF  func(RepoType) interface{}
 	KeyStore map[string]types.KeyInfo
 }
 
@@ -154,9 +161,6 @@ type MemRepoOptions struct {
 func NewMemory(opts *MemRepoOptions) *MemRepo {
 	if opts == nil {
 		opts = &MemRepoOptions{}
-	}
-	if opts.ConfigF == nil {
-		opts.ConfigF = defConfForType
 	}
 	if opts.Ds == nil {
 		opts.Ds = dssync.MutexWrap(datastore.NewMapDatastore())
@@ -169,7 +173,6 @@ func NewMemory(opts *MemRepoOptions) *MemRepo {
 		repoLock:   make(chan struct{}, 1),
 		blockstore: blockstore.WrapIDStore(blockstore.NewMemorySync()),
 		datastore:  opts.Ds,
-		configF:    opts.ConfigF,
 		keystore:   opts.KeyStore,
 	}
 }
@@ -207,6 +210,18 @@ func (mem *MemRepo) Lock(t RepoType) (LockedRepo, error) {
 	}, nil
 }
 
+func (mem *MemRepo) Cleanup() {
+	mem.api.Lock()
+	defer mem.api.Unlock()
+
+	if mem.tempDir != "" {
+		if err := os.RemoveAll(mem.tempDir); err != nil {
+			log.Errorw("cleanup test memrepo", "error", err)
+		}
+		mem.tempDir = ""
+	}
+}
+
 func (lmem *lockedMemRepo) Readonly() bool {
 	return false
 }
@@ -231,20 +246,12 @@ func (lmem *lockedMemRepo) Close() error {
 		return ErrClosedRepo
 	}
 
-	if lmem.tempDir != "" {
-		if err := os.RemoveAll(lmem.tempDir); err != nil {
-			return err
-		}
-		lmem.tempDir = ""
-	}
-
 	lmem.mem.token = nil
 	lmem.mem.api.Lock()
 	lmem.mem.api.ma = nil
 	lmem.mem.api.Unlock()
 	<-lmem.mem.repoLock // unlock
 	return nil
-
 }
 
 func (lmem *lockedMemRepo) Datastore(_ context.Context, ns string) (datastore.Batching, error) {
@@ -263,7 +270,11 @@ func (lmem *lockedMemRepo) Blockstore(ctx context.Context, domain BlockstoreDoma
 }
 
 func (lmem *lockedMemRepo) SplitstorePath() (string, error) {
-	return ioutil.TempDir("", "splitstore.*")
+	splitstorePath := filepath.Join(lmem.Path(), "splitstore")
+	if err := os.MkdirAll(splitstorePath, 0755); err != nil {
+		return "", err
+	}
+	return splitstorePath, nil
 }
 
 func (lmem *lockedMemRepo) ListDatastores(ns string) ([]int64, error) {
@@ -284,7 +295,7 @@ func (lmem *lockedMemRepo) Config() (interface{}, error) {
 	defer lmem.mem.config.Unlock()
 
 	if lmem.mem.config.val == nil {
-		lmem.mem.config.val = lmem.mem.configF(lmem.t)
+		lmem.mem.config.val = lmem.t.Config()
 	}
 
 	return lmem.mem.config.val, nil
@@ -299,7 +310,7 @@ func (lmem *lockedMemRepo) SetConfig(c func(interface{})) error {
 	defer lmem.mem.config.Unlock()
 
 	if lmem.mem.config.val == nil {
-		lmem.mem.config.val = lmem.mem.configF(lmem.t)
+		lmem.mem.config.val = lmem.t.Config()
 	}
 
 	c(lmem.mem.config.val)

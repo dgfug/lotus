@@ -1,23 +1,27 @@
+// stm: #unit
 package retrievaladapter
 
 import (
 	"context"
 	"testing"
 
-	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
-	testnet "github.com/filecoin-project/go-fil-markets/shared_testutil"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/api/mocks"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
-	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/golang/mock/gomock"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
+	testnet "github.com/filecoin-project/go-fil-markets/shared_testutil"
+	"github.com/filecoin-project/go-state-types/abi"
+
+	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/mocks"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func TestGetPricingInput(t *testing.T) {
+	//stm: @CHAIN_STATE_MARKET_STORAGE_DEAL_001
 	ctx := context.Background()
 	tsk := &types.TipSet{}
 	key := tsk.Key()

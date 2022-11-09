@@ -5,53 +5,52 @@ import (
 	"errors"
 	"time"
 
-	metricsi "github.com/ipfs/go-metrics-interface"
-
-	"github.com/filecoin-project/lotus/node/impl/net"
-
-	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/system"
-
 	logging "github.com/ipfs/go-log/v2"
-	ci "github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/libp2p/go-libp2p-core/routing"
+	metricsi "github.com/ipfs/go-metrics-interface"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	record "github.com/libp2p/go-libp2p-record"
+	ci "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/net/conngater"
 	"github.com/multiformats/go-multiaddr"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/journal/alerting"
+	"github.com/filecoin-project/lotus/lib/lotuslog"
 	"github.com/filecoin-project/lotus/lib/peermgr"
 	_ "github.com/filecoin-project/lotus/lib/sigs/bls"
 	_ "github.com/filecoin-project/lotus/lib/sigs/secp"
 	"github.com/filecoin-project/lotus/markets/storageadapter"
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/impl/common"
+	"github.com/filecoin-project/lotus/node/impl/net"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/filecoin-project/lotus/node/modules/lp2p"
 	"github.com/filecoin-project/lotus/node/modules/testing"
 	"github.com/filecoin-project/lotus/node/repo"
+	"github.com/filecoin-project/lotus/storage/paths"
+	"github.com/filecoin-project/lotus/system"
 )
 
 //nolint:deadcode,varcheck
 var log = logging.Logger("builder")
 
 // special is a type used to give keys to modules which
-//  can't really be identified by the returned type
+//
+//	can't really be identified by the returned type
 type special struct{ id int }
 
 //nolint:golint
@@ -69,11 +68,13 @@ var (
 	BandwidthReporterKey = special{11} // Libp2p option
 	ConnGaterKey         = special{12} // libp2p option
 	DAGStoreKey          = special{13} // constructor returns multiple values
+	ResourceManagerKey   = special{14} // Libp2p option
 )
 
 type invoke int
 
 // Invokes are called in the order they are defined.
+//
 //nolint:golint
 const (
 	// InitJournal at position 0 initializes the journal global var as soon as
@@ -104,7 +105,10 @@ const (
 	HandleMigrateClientFundsKey
 	HandlePaymentChannelManagerKey
 
+	RelayIndexerMessagesKey
+
 	// miner
+	PreflightChecksKey
 	GetParamsKey
 	HandleMigrateProviderFundsKey
 	HandleDealsKey
@@ -151,6 +155,7 @@ func defaults() []Option {
 		Override(new(journal.DisabledEvents), journal.EnvDisabledEvents),
 		Override(new(journal.Journal), modules.OpenFilesystemJournal),
 		Override(new(*alerting.Alerting), alerting.NewAlertingSystem),
+		Override(new(dtypes.NodeStartTime), FromVal(dtypes.NodeStartTime(time.Now()))),
 
 		Override(CheckFDLimit, modules.CheckFdLimit(build.DefaultFDLimit)),
 
@@ -162,6 +167,12 @@ func defaults() []Option {
 		}),
 
 		Override(new(dtypes.ShutdownChan), make(chan struct{})),
+
+		// the great context in the sky, otherwise we can't DI build genesis; there has to be a better
+		// solution than this hack.
+		Override(new(context.Context), func(lc fx.Lifecycle, mctx helpers.MetricsCtx) context.Context {
+			return helpers.LifecycleCtx(mctx, lc)
+		}),
 	}
 }
 
@@ -170,14 +181,14 @@ var LibP2P = Options(
 	Override(new(dtypes.Bootstrapper), dtypes.Bootstrapper(false)),
 
 	// Host dependencies
-	Override(new(peerstore.Peerstore), pstoremem.NewPeerstore),
+	Override(new(peerstore.Peerstore), lp2p.Peerstore),
 	Override(PstoreAddSelfKeysKey, lp2p.PstoreAddSelfKeys),
 	Override(StartListeningKey, lp2p.StartListening(config.DefaultFullNode().Libp2p.ListenAddresses)),
 
 	// Host settings
 	Override(DefaultTransportsKey, lp2p.DefaultTransports),
 	Override(AddrsFactoryKey, lp2p.AddrsFactory(nil, nil)),
-	Override(SmuxTransportKey, lp2p.SmuxTransport(true)),
+	Override(SmuxTransportKey, lp2p.SmuxTransport()),
 	Override(RelayKey, lp2p.NoRelay()),
 	Override(SecurityKey, lp2p.Security(true, false)),
 
@@ -210,6 +221,10 @@ var LibP2P = Options(
 	Override(ConnectionManagerKey, lp2p.ConnectionManager(50, 200, 20*time.Second, nil)),
 	Override(new(*conngater.BasicConnectionGater), lp2p.ConnGater),
 	Override(ConnGaterKey, lp2p.ConnGaterOption),
+
+	// Services (resource management)
+	Override(new(network.ResourceManager), lp2p.ResourceManager(200)),
+	Override(ResourceManagerKey, lp2p.ResourceManagerOption),
 )
 
 func IsType(t repo.RepoType) func(s *Settings) bool {
@@ -217,8 +232,12 @@ func IsType(t repo.RepoType) func(s *Settings) bool {
 }
 
 func isFullOrLiteNode(s *Settings) bool { return s.nodeType == repo.FullNode }
-func isFullNode(s *Settings) bool       { return s.nodeType == repo.FullNode && !s.Lite }
-func isLiteNode(s *Settings) bool       { return s.nodeType == repo.FullNode && s.Lite }
+func isFullNode(s *Settings) bool {
+	return s.nodeType == repo.FullNode && !s.Lite
+}
+func isLiteNode(s *Settings) bool {
+	return s.nodeType == repo.FullNode && s.Lite
+}
 
 func Base() Option {
 	return Options(
@@ -236,6 +255,9 @@ func Base() Option {
 
 // Config sets up constructors based on the provided Config
 func ConfigCommon(cfg *config.Common, enableLibp2pNode bool) Option {
+	// setup logging early
+	lotuslog.SetLevelsFromConfig(cfg.Logging.SubsystemLevels)
+
 	return Options(
 		func(s *Settings) error { s.Config = true; return nil },
 		Override(new(dtypes.APIEndpoint), func() (dtypes.APIEndpoint, error) {
@@ -244,10 +266,10 @@ func ConfigCommon(cfg *config.Common, enableLibp2pNode bool) Option {
 		Override(SetApiEndpointKey, func(lr repo.LockedRepo, e dtypes.APIEndpoint) error {
 			return lr.SetAPIEndpoint(e)
 		}),
-		Override(new(stores.URLs), func(e dtypes.APIEndpoint) (stores.URLs, error) {
+		Override(new(paths.URLs), func(e dtypes.APIEndpoint) (paths.URLs, error) {
 			ip := cfg.API.RemoteListenAddress
 
-			var urls stores.URLs
+			var urls paths.URLs
 			urls = append(urls, "http://"+ip+"/remote") // TODO: This makes no assumptions, and probably could...
 			return urls, nil
 		}),
@@ -265,6 +287,7 @@ func ConfigCommon(cfg *config.Common, enableLibp2pNode bool) Option {
 				cfg.Libp2p.ConnMgrHigh,
 				time.Duration(cfg.Libp2p.ConnMgrGrace),
 				cfg.Libp2p.ProtectedPeers)),
+			Override(new(network.ResourceManager), lp2p.ResourceManager(cfg.Libp2p.ConnMgrHigh)),
 			Override(new(*pubsub.PubSub), lp2p.GossipSub),
 			Override(new(*config.Pubsub), &cfg.Pubsub),
 
@@ -370,6 +393,13 @@ func Test() Option {
 func WithRepoType(repoType repo.RepoType) func(s *Settings) error {
 	return func(s *Settings) error {
 		s.nodeType = repoType
+		return nil
+	}
+}
+
+func WithEnableLibp2pNode(enable bool) func(s *Settings) error {
+	return func(s *Settings) error {
+		s.enableLibp2pNode = enable
 		return nil
 	}
 }

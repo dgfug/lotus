@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
-
-	cid "github.com/ipfs/go-cid"
 
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -25,6 +25,7 @@ func (s *SplitStore) Check() error {
 	if !atomic.CompareAndSwapInt32(&s.compacting, 0, 1) {
 		return xerrors.Errorf("can't acquire compaction lock; compacting operation in progress")
 	}
+	s.compactType = check
 
 	if s.compactionIndex == 0 {
 		atomic.StoreInt32(&s.compacting, 0)
@@ -67,7 +68,10 @@ func (s *SplitStore) doCheck(curTs *types.TipSet) error {
 	}
 	defer output.Close() //nolint:errcheck
 
+	var mx sync.Mutex
 	write := func(format string, args ...interface{}) {
+		mx.Lock()
+		defer mx.Unlock()
 		_, err := fmt.Fprintf(output, format+"\n", args...)
 		if err != nil {
 			log.Warnf("error writing check output: %s", err)
@@ -82,9 +86,10 @@ func (s *SplitStore) doCheck(curTs *types.TipSet) error {
 	write("compaction index: %d", s.compactionIndex)
 	write("--")
 
-	var coldCnt, missingCnt int64
+	coldCnt := new(int64)
+	missingCnt := new(int64)
 
-	visitor, err := s.markSetEnv.CreateVisitor("check", 0)
+	visitor, err := s.markSetEnv.New("check", 0)
 	if err != nil {
 		return xerrors.Errorf("error creating visitor: %w", err)
 	}
@@ -96,7 +101,7 @@ func (s *SplitStore) doCheck(curTs *types.TipSet) error {
 				return errStopWalk
 			}
 
-			has, err := s.hot.Has(c)
+			has, err := s.hot.Has(s.ctx, c)
 			if err != nil {
 				return xerrors.Errorf("error checking hotstore: %w", err)
 			}
@@ -105,22 +110,22 @@ func (s *SplitStore) doCheck(curTs *types.TipSet) error {
 				return nil
 			}
 
-			has, err = s.cold.Has(c)
+			has, err = s.cold.Has(s.ctx, c)
 			if err != nil {
 				return xerrors.Errorf("error checking coldstore: %w", err)
 			}
 
 			if has {
-				coldCnt++
+				atomic.AddInt64(coldCnt, 1)
 				write("cold object reference: %s", c)
 			} else {
-				missingCnt++
+				atomic.AddInt64(missingCnt, 1)
 				write("missing object reference: %s", c)
 				return errStopWalk
 			}
 
 			return nil
-		})
+		}, func(cid.Cid) error { return nil })
 
 	if err != nil {
 		err = xerrors.Errorf("error walking chain: %w", err)
@@ -128,9 +133,9 @@ func (s *SplitStore) doCheck(curTs *types.TipSet) error {
 		return err
 	}
 
-	log.Infow("check done", "cold", coldCnt, "missing", missingCnt)
+	log.Infow("check done", "cold", *coldCnt, "missing", *missingCnt)
 	write("--")
-	write("cold: %d missing: %d", coldCnt, missingCnt)
+	write("cold: %d missing: %d", *coldCnt, *missingCnt)
 	write("DONE")
 
 	return nil
@@ -142,6 +147,8 @@ func (s *SplitStore) Info() map[string]interface{} {
 	info["base epoch"] = s.baseEpoch
 	info["warmup epoch"] = s.warmupEpoch
 	info["compactions"] = s.compactionIndex
+	info["prunes"] = s.pruneIndex
+	info["compacting"] = s.compacting == 1
 
 	sizer, ok := s.hot.(bstore.BlockstoreSize)
 	if ok {

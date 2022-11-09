@@ -1,3 +1,4 @@
+// stm: #unit
 package messagepool
 
 import (
@@ -6,16 +7,19 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/go-state-types/network"
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/messagepool/gasguess"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -103,7 +107,7 @@ func (tma *testMpoolAPI) SubscribeHeadChanges(cb func(rev, app []*types.TipSet) 
 	return tma.tipsets[0]
 }
 
-func (tma *testMpoolAPI) PutMessage(m types.ChainMsg) (cid.Cid, error) {
+func (tma *testMpoolAPI) PutMessage(ctx context.Context, m types.ChainMsg) (cid.Cid, error) {
 	return cid.Undef, nil
 }
 
@@ -164,16 +168,20 @@ func (tma *testMpoolAPI) StateAccountKeyAtFinality(ctx context.Context, addr add
 	return addr, nil
 }
 
-func (tma *testMpoolAPI) MessagesForBlock(h *types.BlockHeader) ([]*types.Message, []*types.SignedMessage, error) {
+func (tma *testMpoolAPI) StateNetworkVersion(ctx context.Context, h abi.ChainEpoch) network.Version {
+	return build.TestNetworkVersion
+}
+
+func (tma *testMpoolAPI) MessagesForBlock(ctx context.Context, h *types.BlockHeader) ([]*types.Message, []*types.SignedMessage, error) {
 	return nil, tma.bmsgs[h.Cid()], nil
 }
 
-func (tma *testMpoolAPI) MessagesForTipset(ts *types.TipSet) ([]types.ChainMsg, error) {
+func (tma *testMpoolAPI) MessagesForTipset(ctx context.Context, ts *types.TipSet) ([]types.ChainMsg, error) {
 	if len(ts.Blocks()) != 1 {
 		panic("cant deal with multiblock tipsets in this test")
 	}
 
-	bm, sm, err := tma.MessagesForBlock(ts.Blocks()[0])
+	bm, sm, err := tma.MessagesForBlock(ctx, ts.Blocks()[0])
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +198,7 @@ func (tma *testMpoolAPI) MessagesForTipset(ts *types.TipSet) ([]types.ChainMsg, 
 	return out, nil
 }
 
-func (tma *testMpoolAPI) LoadTipSet(tsk types.TipSetKey) (*types.TipSet, error) {
+func (tma *testMpoolAPI) LoadTipSet(ctx context.Context, tsk types.TipSetKey) (*types.TipSet, error) {
 	for _, ts := range tma.tipsets {
 		if types.CidArrsEqual(tsk.Cids(), ts.Cids()) {
 			return ts, nil
@@ -206,6 +214,7 @@ func (tma *testMpoolAPI) ChainComputeBaseFee(ctx context.Context, ts *types.TipS
 
 func assertNonce(t *testing.T, mp *MessagePool, addr address.Address, val uint64) {
 	t.Helper()
+	//stm: @CHAIN_MEMPOOL_GET_NONCE_001
 	n, err := mp.GetNonce(context.TODO(), addr, types.EmptyTSK)
 	if err != nil {
 		t.Fatal(err)
@@ -224,6 +233,8 @@ func mustAdd(t *testing.T, mp *MessagePool, msg *types.SignedMessage) {
 }
 
 func TestMessagePool(t *testing.T) {
+	//stm: @CHAIN_MEMPOOL_GET_NONCE_001
+
 	tma := newTestMpoolAPI()
 
 	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
@@ -233,7 +244,7 @@ func TestMessagePool(t *testing.T) {
 
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +288,7 @@ func TestCheckMessageBig(t *testing.T) {
 
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
 	assert.NoError(t, err)
 
 	to := mock.Address(1001)
@@ -325,6 +336,7 @@ func TestCheckMessageBig(t *testing.T) {
 			Message:   *msg,
 			Signature: *sig,
 		}
+		//stm: @CHAIN_MEMPOOL_PUSH_001
 		err = mp.Add(context.TODO(), sm)
 		assert.ErrorIs(t, err, ErrMessageTooBig)
 	}
@@ -340,7 +352,7 @@ func TestMessagePoolMessagesInEachBlock(t *testing.T) {
 
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,8 +378,10 @@ func TestMessagePoolMessagesInEachBlock(t *testing.T) {
 	tma.applyBlock(t, a)
 	tsa := mock.TipSet(a)
 
+	//stm: @CHAIN_MEMPOOL_PENDING_001
 	_, _ = mp.Pending(context.TODO())
 
+	//stm: @CHAIN_MEMPOOL_SELECT_001
 	selm, _ := mp.SelectMessages(context.Background(), tsa, 1)
 	if len(selm) == 0 {
 		t.Fatal("should have returned the rest of the messages")
@@ -389,7 +403,7 @@ func TestRevertMessages(t *testing.T) {
 
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -428,6 +442,7 @@ func TestRevertMessages(t *testing.T) {
 
 	assertNonce(t, mp, sender, 4)
 
+	//stm: @CHAIN_MEMPOOL_PENDING_001
 	p, _ := mp.Pending(context.TODO())
 	fmt.Printf("%+v\n", p)
 	if len(p) != 3 {
@@ -452,7 +467,7 @@ func TestPruningSimple(t *testing.T) {
 
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -486,6 +501,7 @@ func TestPruningSimple(t *testing.T) {
 
 	mp.Prune()
 
+	//stm: @CHAIN_MEMPOOL_PENDING_001
 	msgs, _ := mp.Pending(context.TODO())
 	if len(msgs) != 5 {
 		t.Fatal("expected only 5 messages in pool, got: ", len(msgs))
@@ -496,7 +512,7 @@ func TestLoadLocal(t *testing.T) {
 	tma := newTestMpoolAPI()
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -528,6 +544,7 @@ func TestLoadLocal(t *testing.T) {
 	msgs := make(map[cid.Cid]struct{})
 	for i := 0; i < 10; i++ {
 		m := makeTestMessage(w1, a1, a2, uint64(i), gasLimit, uint64(i+1))
+		//stm: @CHAIN_MEMPOOL_PUSH_001
 		cid, err := mp.Push(context.TODO(), m)
 		if err != nil {
 			t.Fatal(err)
@@ -539,11 +556,12 @@ func TestLoadLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mp, err = New(tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	mp, err = New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	//stm: @CHAIN_MEMPOOL_PENDING_001
 	pmsgs, _ := mp.Pending(context.TODO())
 	if len(msgs) != len(pmsgs) {
 		t.Fatalf("expected %d messages, but got %d", len(msgs), len(pmsgs))
@@ -568,7 +586,7 @@ func TestClearAll(t *testing.T) {
 	tma := newTestMpoolAPI()
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -599,6 +617,7 @@ func TestClearAll(t *testing.T) {
 	gasLimit := gasguess.Costs[gasguess.CostKey{Code: builtin2.StorageMarketActorCodeID, M: 2}]
 	for i := 0; i < 10; i++ {
 		m := makeTestMessage(w1, a1, a2, uint64(i), gasLimit, uint64(i+1))
+		//stm: @CHAIN_MEMPOOL_PUSH_001
 		_, err := mp.Push(context.TODO(), m)
 		if err != nil {
 			t.Fatal(err)
@@ -610,8 +629,10 @@ func TestClearAll(t *testing.T) {
 		mustAdd(t, mp, m)
 	}
 
+	//stm: @CHAIN_MEMPOOL_CLEAR_001
 	mp.Clear(context.Background(), true)
 
+	//stm: @CHAIN_MEMPOOL_PENDING_001
 	pending, _ := mp.Pending(context.TODO())
 	if len(pending) > 0 {
 		t.Fatalf("cleared the mpool, but got %d pending messages", len(pending))
@@ -622,7 +643,7 @@ func TestClearNonLocal(t *testing.T) {
 	tma := newTestMpoolAPI()
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -654,6 +675,7 @@ func TestClearNonLocal(t *testing.T) {
 	gasLimit := gasguess.Costs[gasguess.CostKey{Code: builtin2.StorageMarketActorCodeID, M: 2}]
 	for i := 0; i < 10; i++ {
 		m := makeTestMessage(w1, a1, a2, uint64(i), gasLimit, uint64(i+1))
+		//stm: @CHAIN_MEMPOOL_PUSH_001
 		_, err := mp.Push(context.TODO(), m)
 		if err != nil {
 			t.Fatal(err)
@@ -665,8 +687,10 @@ func TestClearNonLocal(t *testing.T) {
 		mustAdd(t, mp, m)
 	}
 
+	//stm: @CHAIN_MEMPOOL_CLEAR_001
 	mp.Clear(context.Background(), false)
 
+	//stm: @CHAIN_MEMPOOL_PENDING_001
 	pending, _ := mp.Pending(context.TODO())
 	if len(pending) != 10 {
 		t.Fatalf("expected 10 pending messages, but got %d instead", len(pending))
@@ -683,7 +707,7 @@ func TestUpdates(t *testing.T) {
 	tma := newTestMpoolAPI()
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -724,6 +748,7 @@ func TestUpdates(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		m := makeTestMessage(w1, a1, a2, uint64(i), gasLimit, uint64(i+1))
+		//stm: @CHAIN_MEMPOOL_PUSH_001
 		_, err := mp.Push(context.TODO(), m)
 		if err != nil {
 			t.Fatal(err)
@@ -743,5 +768,316 @@ func TestUpdates(t *testing.T) {
 	_, ok := <-ch
 	if ok {
 		t.Fatal("expected closed channel, but got an update instead")
+	}
+}
+
+func TestMessageBelowMinGasFee(t *testing.T) {
+	//stm: @CHAIN_MEMPOOL_PUSH_001
+	tma := newTestMpoolAPI()
+
+	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
+	assert.NoError(t, err)
+
+	from, err := w.WalletNew(context.Background(), types.KTBLS)
+	assert.NoError(t, err)
+
+	tma.setBalance(from, 1000e9)
+
+	ds := datastore.NewMapDatastore()
+
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	assert.NoError(t, err)
+
+	to := mock.Address(1001)
+
+	// fee is just below minimum gas fee
+	fee := minimumBaseFee.Uint64() - 1
+	{
+		msg := &types.Message{
+			To:         to,
+			From:       from,
+			Value:      types.NewInt(1),
+			Nonce:      0,
+			GasLimit:   50000000,
+			GasFeeCap:  types.NewInt(fee),
+			GasPremium: types.NewInt(1),
+			Params:     make([]byte, 32<<10),
+		}
+
+		sig, err := w.WalletSign(context.TODO(), from, msg.Cid().Bytes(), api.MsgMeta{})
+		if err != nil {
+			panic(err)
+		}
+		sm := &types.SignedMessage{
+			Message:   *msg,
+			Signature: *sig,
+		}
+		err = mp.Add(context.TODO(), sm)
+		assert.ErrorIs(t, err, ErrGasFeeCapTooLow)
+	}
+}
+
+func TestMessageValueTooHigh(t *testing.T) {
+	//stm: @CHAIN_MEMPOOL_PUSH_001
+	tma := newTestMpoolAPI()
+
+	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
+	assert.NoError(t, err)
+
+	from, err := w.WalletNew(context.Background(), types.KTBLS)
+	assert.NoError(t, err)
+
+	tma.setBalance(from, 1000e9)
+
+	ds := datastore.NewMapDatastore()
+
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	assert.NoError(t, err)
+
+	to := mock.Address(1001)
+
+	totalFil := types.TotalFilecoinInt
+	extra := types.NewInt(1)
+
+	value := types.BigAdd(totalFil, extra)
+	{
+		msg := &types.Message{
+			To:         to,
+			From:       from,
+			Value:      value,
+			Nonce:      0,
+			GasLimit:   50000000,
+			GasFeeCap:  types.NewInt(minimumBaseFee.Uint64()),
+			GasPremium: types.NewInt(1),
+			Params:     make([]byte, 32<<10),
+		}
+
+		sig, err := w.WalletSign(context.TODO(), from, msg.Cid().Bytes(), api.MsgMeta{})
+		if err != nil {
+			panic(err)
+		}
+		sm := &types.SignedMessage{
+			Message:   *msg,
+			Signature: *sig,
+		}
+		err = mp.Add(context.TODO(), sm)
+		assert.Error(t, err)
+	}
+}
+
+func TestMessageSignatureInvalid(t *testing.T) {
+	//stm: @CHAIN_MEMPOOL_PUSH_001
+	tma := newTestMpoolAPI()
+
+	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
+	assert.NoError(t, err)
+
+	from, err := w.WalletNew(context.Background(), types.KTBLS)
+	assert.NoError(t, err)
+
+	tma.setBalance(from, 1000e9)
+
+	ds := datastore.NewMapDatastore()
+
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	assert.NoError(t, err)
+
+	to := mock.Address(1001)
+
+	{
+		msg := &types.Message{
+			To:         to,
+			From:       from,
+			Value:      types.NewInt(1),
+			Nonce:      0,
+			GasLimit:   50000000,
+			GasFeeCap:  types.NewInt(minimumBaseFee.Uint64()),
+			GasPremium: types.NewInt(1),
+			Params:     make([]byte, 32<<10),
+		}
+
+		badSig := &crypto.Signature{
+			Type: crypto.SigTypeSecp256k1,
+			Data: make([]byte, 0),
+		}
+		sm := &types.SignedMessage{
+			Message:   *msg,
+			Signature: *badSig,
+		}
+		err = mp.Add(context.TODO(), sm)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid signature length")
+	}
+}
+
+func TestAddMessageTwice(t *testing.T) {
+	//stm: @CHAIN_MEMPOOL_PUSH_001
+	tma := newTestMpoolAPI()
+
+	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
+	assert.NoError(t, err)
+
+	from, err := w.WalletNew(context.Background(), types.KTBLS)
+	assert.NoError(t, err)
+
+	tma.setBalance(from, 1000e9)
+
+	ds := datastore.NewMapDatastore()
+
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	assert.NoError(t, err)
+
+	to := mock.Address(1001)
+
+	{
+		msg := &types.Message{
+			To:         to,
+			From:       from,
+			Value:      types.NewInt(1),
+			Nonce:      0,
+			GasLimit:   50000000,
+			GasFeeCap:  types.NewInt(minimumBaseFee.Uint64()),
+			GasPremium: types.NewInt(1),
+			Params:     make([]byte, 32<<10),
+		}
+
+		sig, err := w.WalletSign(context.TODO(), from, msg.Cid().Bytes(), api.MsgMeta{})
+		if err != nil {
+			panic(err)
+		}
+		sm := &types.SignedMessage{
+			Message:   *msg,
+			Signature: *sig,
+		}
+		mustAdd(t, mp, sm)
+
+		err = mp.Add(context.TODO(), sm)
+		assert.Contains(t, err.Error(), "with nonce 0 already in mpool")
+	}
+}
+
+func TestAddMessageTwiceNonceGap(t *testing.T) {
+	//stm: @CHAIN_MEMPOOL_PUSH_001
+	tma := newTestMpoolAPI()
+
+	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
+	assert.NoError(t, err)
+
+	from, err := w.WalletNew(context.Background(), types.KTBLS)
+	assert.NoError(t, err)
+
+	tma.setBalance(from, 1000e9)
+
+	ds := datastore.NewMapDatastore()
+
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	assert.NoError(t, err)
+
+	to := mock.Address(1001)
+
+	{
+		// create message with invalid nonce (1)
+		sm := makeTestMessage(w, from, to, 1, 50_000_000, minimumBaseFee.Uint64())
+		mustAdd(t, mp, sm)
+
+		// then try to add message again
+		err = mp.Add(context.TODO(), sm)
+		assert.Contains(t, err.Error(), "unfulfilled nonce gap")
+	}
+}
+
+func TestAddMessageTwiceCidDiff(t *testing.T) {
+	tma := newTestMpoolAPI()
+
+	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
+	assert.NoError(t, err)
+
+	from, err := w.WalletNew(context.Background(), types.KTBLS)
+	assert.NoError(t, err)
+
+	tma.setBalance(from, 1000e9)
+
+	ds := datastore.NewMapDatastore()
+
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	assert.NoError(t, err)
+
+	to := mock.Address(1001)
+
+	{
+		sm := makeTestMessage(w, from, to, 0, 50_000_000, minimumBaseFee.Uint64())
+		mustAdd(t, mp, sm)
+
+		// Create message with different data, so CID is different
+		sm2 := makeTestMessage(w, from, to, 0, 50_000_001, minimumBaseFee.Uint64())
+
+		//stm: @CHAIN_MEMPOOL_PUSH_001
+		// then try to add message again
+		err = mp.Add(context.TODO(), sm2)
+		// assert.Contains(t, err.Error(), "replace by fee has too low GasPremium")
+		assert.Error(t, err)
+	}
+}
+
+func TestAddMessageTwiceCidDiffReplaced(t *testing.T) {
+	//stm: @CHAIN_MEMPOOL_PUSH_001
+	tma := newTestMpoolAPI()
+
+	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
+	assert.NoError(t, err)
+
+	from, err := w.WalletNew(context.Background(), types.KTBLS)
+	assert.NoError(t, err)
+
+	tma.setBalance(from, 1000e9)
+
+	ds := datastore.NewMapDatastore()
+
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	assert.NoError(t, err)
+
+	to := mock.Address(1001)
+
+	{
+		sm := makeTestMessage(w, from, to, 0, 50_000_000, minimumBaseFee.Uint64())
+		mustAdd(t, mp, sm)
+
+		// Create message with different data, so CID is different
+		sm2 := makeTestMessage(w, from, to, 0, 50_000_000, minimumBaseFee.Uint64()*2)
+		mustAdd(t, mp, sm2)
+	}
+}
+
+func TestRemoveMessage(t *testing.T) {
+	//stm: @CHAIN_MEMPOOL_PUSH_001
+	tma := newTestMpoolAPI()
+
+	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
+	assert.NoError(t, err)
+
+	from, err := w.WalletNew(context.Background(), types.KTBLS)
+	assert.NoError(t, err)
+
+	tma.setBalance(from, 1000e9)
+
+	ds := datastore.NewMapDatastore()
+
+	mp, err := New(context.Background(), tma, ds, filcns.DefaultUpgradeSchedule(), "mptest", nil)
+	assert.NoError(t, err)
+
+	to := mock.Address(1001)
+
+	{
+		sm := makeTestMessage(w, from, to, 0, 50_000_000, minimumBaseFee.Uint64())
+		mustAdd(t, mp, sm)
+
+		//stm: @CHAIN_MEMPOOL_REMOVE_001
+		// remove message for sender
+		mp.Remove(context.TODO(), from, sm.Message.Nonce, true)
+
+		//stm: @CHAIN_MEMPOOL_PENDING_FOR_001
+		// check messages in pool: should be none present
+		msgs := mp.pendingFor(context.TODO(), from)
+		assert.Len(t, msgs, 0)
 	}
 }

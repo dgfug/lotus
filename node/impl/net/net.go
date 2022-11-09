@@ -4,18 +4,20 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
 
-	"go.uber.org/fx"
-
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/metrics"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
-	swarm "github.com/libp2p/go-libp2p-swarm"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/metrics"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	"github.com/libp2p/go-libp2p/p2p/net/conngater"
+	"github.com/libp2p/go-libp2p/p2p/net/swarm"
+	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	ma "github.com/multiformats/go-multiaddr"
+	"go.uber.org/fx"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
@@ -25,12 +27,13 @@ import (
 type NetAPI struct {
 	fx.In
 
-	RawHost   lp2p.RawHost
-	Host      host.Host
-	Router    lp2p.BaseIpfsRouting
-	ConnGater *conngater.BasicConnectionGater
-	Reporter  metrics.Reporter
-	Sk        *dtypes.ScoreKeeper
+	RawHost         lp2p.RawHost
+	Host            host.Host
+	Router          lp2p.BaseIpfsRouting
+	ConnGater       *conngater.BasicConnectionGater
+	ResourceManager network.ResourceManager
+	Reporter        metrics.Reporter
+	Sk              *dtypes.ScoreKeeper
 }
 
 func (a *NetAPI) ID(context.Context) (peer.ID, error) {
@@ -174,6 +177,14 @@ func (a *NetAPI) NetBandwidthStatsByPeer(ctx context.Context) (map[string]metric
 		out[p.String()] = s
 	}
 	return out, nil
+}
+
+func (a *NetAPI) NetPing(ctx context.Context, p peer.ID) (time.Duration, error) {
+	result, ok := <-ping.Ping(ctx, a.Host, p)
+	if !ok {
+		return 0, xerrors.Errorf("didn't get ping result: %w", ctx.Err())
+	}
+	return result.RTT, result.Error
 }
 
 func (a *NetAPI) NetBandwidthStatsByProtocol(ctx context.Context) (map[protocol.ID]metrics.Stats, error) {

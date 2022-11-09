@@ -4,11 +4,10 @@ import (
 	"context"
 	"strings"
 
-	"go.uber.org/multierr"
-	"golang.org/x/xerrors"
-
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/query"
+	"go.uber.org/multierr"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
@@ -116,7 +115,7 @@ func (nd *Node) LoadSim(ctx context.Context, name string) (*Simulation, error) {
 // Create creates a new simulation.
 //
 // - This will fail if a simulation already exists with the given name.
-// - Name must not contain a '/'.
+// - Num must not contain a '/'.
 func (nd *Node) CreateSim(ctx context.Context, name string, head *types.TipSet) (*Simulation, error) {
 	if strings.Contains(name, "/") {
 		return nil, xerrors.Errorf("simulation name %q cannot contain a '/'", name)
@@ -135,7 +134,7 @@ func (nd *Node) CreateSim(ctx context.Context, name string, head *types.TipSet) 
 		StateManager: sm,
 		stages:       stages,
 	}
-	if has, err := nd.MetadataDS.Has(sim.key("head")); err != nil {
+	if has, err := nd.MetadataDS.Has(ctx, sim.key("head")); err != nil {
 		return nil, err
 	} else if has {
 		return nil, xerrors.Errorf("simulation named %s already exists", name)
@@ -155,7 +154,7 @@ func (nd *Node) CreateSim(ctx context.Context, name string, head *types.TipSet) 
 // ListSims lists all simulations.
 func (nd *Node) ListSims(ctx context.Context) ([]string, error) {
 	prefix := simulationPrefix.ChildString("head").String()
-	items, err := nd.MetadataDS.Query(query.Query{
+	items, err := nd.MetadataDS.Query(ctx, query.Query{
 		Prefix:   prefix,
 		KeysOnly: true,
 		Orders:   []query.Order{query.OrderByKey{}},
@@ -192,7 +191,7 @@ func (nd *Node) DeleteSim(ctx context.Context, name string) error {
 	var err error
 	for _, field := range simFields {
 		key := simulationPrefix.ChildString(field).ChildString(name)
-		err = multierr.Append(err, nd.MetadataDS.Delete(key))
+		err = multierr.Append(err, nd.MetadataDS.Delete(ctx, key))
 	}
 	return err
 }
@@ -209,7 +208,7 @@ func (nd *Node) CopySim(ctx context.Context, oldName, newName string) error {
 	values := make(map[string][]byte)
 	for _, field := range simFields {
 		key := simulationPrefix.ChildString(field).ChildString(oldName)
-		value, err := nd.MetadataDS.Get(key)
+		value, err := nd.MetadataDS.Get(ctx, key)
 		if err == datastore.ErrNotFound {
 			continue
 		} else if err != nil {
@@ -226,9 +225,9 @@ func (nd *Node) CopySim(ctx context.Context, oldName, newName string) error {
 		key := simulationPrefix.ChildString(field).ChildString(newName)
 		var err error
 		if value, ok := values[field]; ok {
-			err = nd.MetadataDS.Put(key, value)
+			err = nd.MetadataDS.Put(ctx, key, value)
 		} else {
-			err = nd.MetadataDS.Delete(key)
+			err = nd.MetadataDS.Delete(ctx, key)
 		}
 		if err != nil {
 			return err

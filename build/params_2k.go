@@ -10,15 +10,19 @@ import (
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	actorstypes "github.com/filecoin-project/go-state-types/actors"
 	"github.com/filecoin-project/go-state-types/network"
+
 	"github.com/filecoin-project/lotus/chain/actors/policy"
-	miner6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/miner"
 )
 
 const BootstrappersFile = ""
 const GenesisFile = ""
 
-const GenesisNetworkVersion = network.Version14
+var NetworkBundle = "devnet"
+var BundleOverrides map[actorstypes.Version]string
+
+const GenesisNetworkVersion = network.Version16
 
 var UpgradeBreezeHeight = abi.ChainEpoch(-1)
 
@@ -48,15 +52,29 @@ var UpgradeHyperdriveHeight = abi.ChainEpoch(-16)
 
 var UpgradeChocolateHeight = abi.ChainEpoch(-17)
 
+var UpgradeOhSnapHeight = abi.ChainEpoch(-18)
+
+var UpgradeSkyrHeight = abi.ChainEpoch(-19)
+
+var UpgradeSharkHeight = abi.ChainEpoch(100)
+
 var DrandSchedule = map[abi.ChainEpoch]DrandEnum{
 	0: DrandMainnet,
 }
 
+var SupportedProofTypes = []abi.RegisteredSealProof{
+	abi.RegisteredSealProof_StackedDrg2KiBV1,
+	abi.RegisteredSealProof_StackedDrg8MiBV1,
+}
+var ConsensusMinerMinPower = abi.NewStoragePower(2048)
+var MinVerifiedDealSize = abi.NewStoragePower(256)
+var PreCommitChallengeDelay = abi.ChainEpoch(10)
+
 func init() {
-	policy.SetSupportedProofTypes(abi.RegisteredSealProof_StackedDrg2KiBV1, abi.RegisteredSealProof_StackedDrg8MiBV1)
-	policy.SetConsensusMinerMinPower(abi.NewStoragePower(2048))
-	policy.SetMinVerifiedDealSize(abi.NewStoragePower(256))
-	policy.SetPreCommitChallengeDelay(abi.ChainEpoch(10))
+	policy.SetSupportedProofTypes(SupportedProofTypes...)
+	policy.SetConsensusMinerMinPower(ConsensusMinerMinPower)
+	policy.SetMinVerifiedDealSize(MinVerifiedDealSize)
+	policy.SetPreCommitChallengeDelay(PreCommitChallengeDelay)
 
 	getUpgradeHeight := func(ev string, def abi.ChainEpoch) abi.ChainEpoch {
 		hs, found := os.LookupEnv(ev)
@@ -89,11 +107,12 @@ func init() {
 	UpgradeTurboHeight = getUpgradeHeight("LOTUS_ACTORSV4_HEIGHT", UpgradeTurboHeight)
 	UpgradeHyperdriveHeight = getUpgradeHeight("LOTUS_HYPERDRIVE_HEIGHT", UpgradeHyperdriveHeight)
 	UpgradeChocolateHeight = getUpgradeHeight("LOTUS_CHOCOLATE_HEIGHT", UpgradeChocolateHeight)
+	UpgradeOhSnapHeight = getUpgradeHeight("LOTUS_OHSNAP_HEIGHT", UpgradeOhSnapHeight)
+	UpgradeSkyrHeight = getUpgradeHeight("LOTUS_SKYR_HEIGHT", UpgradeSkyrHeight)
+	UpgradeSharkHeight = getUpgradeHeight("LOTUS_SHARK_HEIGHT", UpgradeSharkHeight)
 
 	BuildType |= Build2k
 
-	// To test out what this proposal would like on devnets / testnets: https://github.com/filecoin-project/FIPs/pull/190
-	miner6.FaultMaxAge = miner6.WPoStProvingPeriod * 42
 }
 
 const BlockDelaySecs = uint64(4)

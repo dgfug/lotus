@@ -9,6 +9,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
+
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
 )
@@ -73,7 +74,7 @@ func (sim *Simulation) makeTipSet(ctx context.Context, messages []*types.Message
 		Timestamp:             uts,
 		ElectionProof:         &types.ElectionProof{WinCount: 1},
 	}}
-	err = sim.Node.Chainstore.PersistBlockHeaders(blks...)
+	err = sim.Node.Chainstore.PersistBlockHeaders(ctx, blks...)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to persist block headers: %w", err)
 	}

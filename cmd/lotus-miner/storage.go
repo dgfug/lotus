@@ -5,14 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/bits"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/filecoin-project/lotus/api/v0api"
 
 	"github.com/docker/go-units"
 	"github.com/fatih/color"
@@ -22,16 +21,17 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-bitfield"
 	"github.com/filecoin-project/go-state-types/abi"
 
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
-	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
-	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
-	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
-	sealing "github.com/filecoin-project/lotus/extern/storage-sealing"
 	"github.com/filecoin-project/lotus/lib/tablewriter"
+	sealing "github.com/filecoin-project/lotus/storage/pipeline"
+	"github.com/filecoin-project/lotus/storage/sealer/fsutil"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 const metaFile = "sectorstore.json"
@@ -45,9 +45,12 @@ long term for proving (references as 'store') as well as how sectors will be
 stored while moving through the sealing pipeline (references as 'seal').`,
 	Subcommands: []*cli.Command{
 		storageAttachCmd,
+		storageDetachCmd,
+		storageRedeclareCmd,
 		storageListCmd,
 		storageFindCmd,
 		storageCleanupCmd,
+		storageLocks,
 	},
 }
 
@@ -95,9 +98,17 @@ over time
 			Name:  "max-storage",
 			Usage: "(for init) limit storage space for sectors (expensive for very large paths!)",
 		},
+		&cli.StringSliceFlag{
+			Name:  "groups",
+			Usage: "path group names",
+		},
+		&cli.StringSliceFlag{
+			Name:  "allow-to",
+			Usage: "path groups allowed to pull data from this path (allow all if not specified)",
+		},
 	},
 	Action: func(cctx *cli.Context) error {
-		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
+		minerApi, closer, err := lcli.GetStorageMinerAPI(cctx)
 		if err != nil {
 			return err
 		}
@@ -136,12 +147,14 @@ over time
 				}
 			}
 
-			cfg := &stores.LocalStorageMeta{
-				ID:         stores.ID(uuid.New().String()),
+			cfg := &storiface.LocalStorageMeta{
+				ID:         storiface.ID(uuid.New().String()),
 				Weight:     cctx.Uint64("weight"),
 				CanSeal:    cctx.Bool("seal"),
 				CanStore:   cctx.Bool("store"),
 				MaxStorage: uint64(maxStor),
+				Groups:     cctx.StringSlice("groups"),
+				AllowTo:    cctx.StringSlice("allow-to"),
 			}
 
 			if !(cfg.CanStore || cfg.CanSeal) {
@@ -158,7 +171,83 @@ over time
 			}
 		}
 
-		return nodeApi.StorageAddLocal(ctx, p)
+		return minerApi.StorageAddLocal(ctx, p)
+	},
+}
+
+var storageDetachCmd = &cli.Command{
+	Name:  "detach",
+	Usage: "detach local storage path",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name: "really-do-it",
+		},
+	},
+	ArgsUsage: "[path]",
+	Action: func(cctx *cli.Context) error {
+		minerApi, closer, err := lcli.GetStorageMinerAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := lcli.ReqContext(cctx)
+
+		if !cctx.Args().Present() {
+			return xerrors.Errorf("must specify storage path")
+		}
+
+		p, err := homedir.Expand(cctx.Args().First())
+		if err != nil {
+			return xerrors.Errorf("expanding path: %w", err)
+		}
+
+		if !cctx.Bool("really-do-it") {
+			return xerrors.Errorf("pass --really-do-it to execute the action")
+		}
+
+		return minerApi.StorageDetachLocal(ctx, p)
+	},
+}
+
+var storageRedeclareCmd = &cli.Command{
+	Name:  "redeclare",
+	Usage: "redeclare sectors in a local storage path",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "id",
+			Usage: "storage path ID",
+		},
+		&cli.BoolFlag{
+			Name:  "all",
+			Usage: "redeclare all storage paths",
+		},
+		&cli.BoolFlag{
+			Name:  "drop-missing",
+			Usage: "Drop index entries with missing files",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		minerApi, closer, err := lcli.GetStorageMinerAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := lcli.ReqContext(cctx)
+
+		if cctx.IsSet("id") && cctx.Bool("all") {
+			return xerrors.Errorf("--id and --all can't be passed at the same time")
+		}
+
+		if cctx.IsSet("id") {
+			id := storiface.ID(cctx.String("id"))
+			return minerApi.StorageRedeclareLocal(ctx, &id, cctx.Bool("drop-missing"))
+		}
+
+		if cctx.Bool("all") {
+			return minerApi.StorageRedeclareLocal(ctx, nil, cctx.Bool("drop-missing"))
+		}
+
+		return xerrors.Errorf("either --all or --id must be specified")
 	},
 }
 
@@ -180,32 +269,32 @@ var storageListCmd = &cli.Command{
 			color.NoColor = !cctx.Bool("color")
 		}
 
-		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
+		minerApi, closer, err := lcli.GetStorageMinerAPI(cctx)
 		if err != nil {
 			return err
 		}
 		defer closer()
 		ctx := lcli.ReqContext(cctx)
 
-		st, err := nodeApi.StorageList(ctx)
+		st, err := minerApi.StorageList(ctx)
 		if err != nil {
 			return err
 		}
 
-		local, err := nodeApi.StorageLocal(ctx)
+		local, err := minerApi.StorageLocal(ctx)
 		if err != nil {
 			return err
 		}
 
 		type fsInfo struct {
-			stores.ID
-			sectors []stores.Decl
+			storiface.ID
+			sectors []storiface.Decl
 			stat    fsutil.FsStat
 		}
 
 		sorted := make([]fsInfo, 0, len(st))
 		for id, decls := range st {
-			st, err := nodeApi.StorageStat(ctx, id)
+			st, err := minerApi.StorageStat(ctx, id)
 			if err != nil {
 				sorted = append(sorted, fsInfo{ID: id, sectors: decls})
 				continue
@@ -223,7 +312,7 @@ var storageListCmd = &cli.Command{
 
 		for _, s := range sorted {
 
-			var cnt [3]int
+			var cnt [5]int
 			for _, decl := range s.sectors {
 				for i := range cnt {
 					if decl.SectorFileType&(1<<i) != 0 {
@@ -235,7 +324,7 @@ var storageListCmd = &cli.Command{
 			fmt.Printf("%s:\n", s.ID)
 
 			pingStart := time.Now()
-			st, err := nodeApi.StorageStat(ctx, s.ID)
+			st, err := minerApi.StorageStat(ctx, s.ID)
 			if err != nil {
 				fmt.Printf("\t%s: %s:\n", color.RedString("Error"), err)
 				continue
@@ -302,13 +391,15 @@ var storageListCmd = &cli.Command{
 					color.New(percCol).Sprintf("%d%%", usedPercent))
 			}
 
-			fmt.Printf("\t%s; %s; %s; Reserved: %s\n",
+			fmt.Printf("\t%s; %s; %s; %s; %s; Reserved: %s\n",
 				color.YellowString("Unsealed: %d", cnt[0]),
 				color.GreenString("Sealed: %d", cnt[1]),
 				color.BlueString("Caches: %d", cnt[2]),
+				color.GreenString("Updated: %d", cnt[3]),
+				color.BlueString("Update-caches: %d", cnt[4]),
 				types.SizeStr(types.NewInt(uint64(st.Reserved))))
 
-			si, err := nodeApi.StorageInfo(ctx, s.ID)
+			si, err := minerApi.StorageInfo(ctx, s.ID)
 			if err != nil {
 				return err
 			}
@@ -322,9 +413,30 @@ var storageListCmd = &cli.Command{
 				if si.CanStore {
 					fmt.Print(color.CyanString("Store"))
 				}
-				fmt.Println("")
 			} else {
 				fmt.Print(color.HiYellowString("Use: ReadOnly"))
+			}
+			fmt.Println()
+
+			if len(si.Groups) > 0 {
+				fmt.Printf("\tGroups: %s\n", strings.Join(si.Groups, ", "))
+			}
+			if len(si.AllowTo) > 0 {
+				fmt.Printf("\tAllowTo: %s\n", strings.Join(si.AllowTo, ", "))
+			}
+
+			if len(si.AllowTypes) > 0 || len(si.DenyTypes) > 0 {
+				denied := storiface.FTAll.SubAllowed(si.AllowTypes, si.DenyTypes)
+				allowed := storiface.FTAll ^ denied
+
+				switch {
+				case bits.OnesCount64(uint64(allowed)) == 0:
+					fmt.Printf("\tAllow Types: %s\n", color.RedString("None"))
+				case bits.OnesCount64(uint64(allowed)) < bits.OnesCount64(uint64(denied)):
+					fmt.Printf("\tAllow Types: %s\n", color.GreenString(strings.Join(allowed.Strings(), " ")))
+				default:
+					fmt.Printf("\tDeny Types:  %s\n", color.RedString(strings.Join(denied.Strings(), " ")))
+				}
 			}
 
 			if localPath, ok := local[s.ID]; ok {
@@ -346,10 +458,11 @@ var storageListCmd = &cli.Command{
 }
 
 type storedSector struct {
-	id    stores.ID
-	store stores.SectorStorageInfo
+	id    storiface.ID
+	store storiface.SectorStorageInfo
 
 	unsealed, sealed, cache bool
+	update, updatecache     bool
 }
 
 var storageFindCmd = &cli.Command{
@@ -357,14 +470,14 @@ var storageFindCmd = &cli.Command{
 	Usage:     "find sector in the storage system",
 	ArgsUsage: "[sector number]",
 	Action: func(cctx *cli.Context) error {
-		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
+		minerApi, closer, err := lcli.GetStorageMinerAPI(cctx)
 		if err != nil {
 			return err
 		}
 		defer closer()
 		ctx := lcli.ReqContext(cctx)
 
-		ma, err := nodeApi.ActorAddress(ctx)
+		ma, err := minerApi.ActorAddress(ctx)
 		if err != nil {
 			return err
 		}
@@ -388,22 +501,32 @@ var storageFindCmd = &cli.Command{
 			Number: abi.SectorNumber(snum),
 		}
 
-		u, err := nodeApi.StorageFindSector(ctx, sid, storiface.FTUnsealed, 0, false)
+		u, err := minerApi.StorageFindSector(ctx, sid, storiface.FTUnsealed, 0, false)
 		if err != nil {
 			return xerrors.Errorf("finding unsealed: %w", err)
 		}
 
-		s, err := nodeApi.StorageFindSector(ctx, sid, storiface.FTSealed, 0, false)
+		s, err := minerApi.StorageFindSector(ctx, sid, storiface.FTSealed, 0, false)
 		if err != nil {
 			return xerrors.Errorf("finding sealed: %w", err)
 		}
 
-		c, err := nodeApi.StorageFindSector(ctx, sid, storiface.FTCache, 0, false)
+		c, err := minerApi.StorageFindSector(ctx, sid, storiface.FTCache, 0, false)
 		if err != nil {
 			return xerrors.Errorf("finding cache: %w", err)
 		}
 
-		byId := map[stores.ID]*storedSector{}
+		us, err := minerApi.StorageFindSector(ctx, sid, storiface.FTUpdate, 0, false)
+		if err != nil {
+			return xerrors.Errorf("finding sealed: %w", err)
+		}
+
+		uc, err := minerApi.StorageFindSector(ctx, sid, storiface.FTUpdateCache, 0, false)
+		if err != nil {
+			return xerrors.Errorf("finding cache: %w", err)
+		}
+
+		byId := map[storiface.ID]*storedSector{}
 		for _, info := range u {
 			sts, ok := byId[info.ID]
 			if !ok {
@@ -437,8 +560,30 @@ var storageFindCmd = &cli.Command{
 			}
 			sts.cache = true
 		}
+		for _, info := range us {
+			sts, ok := byId[info.ID]
+			if !ok {
+				sts = &storedSector{
+					id:    info.ID,
+					store: info,
+				}
+				byId[info.ID] = sts
+			}
+			sts.update = true
+		}
+		for _, info := range uc {
+			sts, ok := byId[info.ID]
+			if !ok {
+				sts = &storedSector{
+					id:    info.ID,
+					store: info,
+				}
+				byId[info.ID] = sts
+			}
+			sts.updatecache = true
+		}
 
-		local, err := nodeApi.StorageLocal(ctx)
+		local, err := minerApi.StorageLocal(ctx)
 		if err != nil {
 			return err
 		}
@@ -461,6 +606,12 @@ var storageFindCmd = &cli.Command{
 			}
 			if info.cache {
 				types += "Cache, "
+			}
+			if info.update {
+				types += "Update, "
+			}
+			if info.updatecache {
+				types += "UpdateCache, "
 			}
 
 			fmt.Printf("In %s (%s)\n", info.id, types[:len(types)-2])
@@ -494,13 +645,13 @@ var storageListSectorsCmd = &cli.Command{
 			color.NoColor = !cctx.Bool("color")
 		}
 
-		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
+		minerApi, closer, err := lcli.GetStorageMinerAPI(cctx)
 		if err != nil {
 			return err
 		}
 		defer closer()
 
-		napi, closer2, err := lcli.GetFullNodeAPI(cctx)
+		napi, closer2, err := lcli.GetFullNodeAPIV1(cctx)
 		if err != nil {
 			return err
 		}
@@ -508,12 +659,12 @@ var storageListSectorsCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		sectors, err := nodeApi.SectorsList(ctx)
+		sectors, err := minerApi.SectorsList(ctx)
 		if err != nil {
 			return xerrors.Errorf("listing sectors: %w", err)
 		}
 
-		maddr, err := nodeApi.ActorAddress(ctx)
+		maddr, err := minerApi.ActorAddress(ctx)
 		if err != nil {
 			return err
 		}
@@ -535,27 +686,38 @@ var storageListSectorsCmd = &cli.Command{
 			}
 		}
 
+		allParts, err := getAllPartitions(ctx, maddr, napi)
+		if err != nil {
+			return xerrors.Errorf("getting partition states: %w", err)
+		}
+
 		type entry struct {
 			id      abi.SectorNumber
-			storage stores.ID
+			storage storiface.ID
 			ft      storiface.SectorFileType
 			urls    string
 
-			primary, seal, store bool
+			primary, copy, main, seal, store bool
 
 			state api.SectorState
+
+			faulty bool
 		}
 
 		var list []entry
 
 		for _, sector := range sectors {
-			st, err := nodeApi.SectorsStatus(ctx, sector, false)
+			st, err := minerApi.SectorsStatus(ctx, sector, false)
 			if err != nil {
 				return xerrors.Errorf("getting sector status for sector %d: %w", sector, err)
 			}
+			fault, err := allParts.FaultySectors.IsSet(uint64(sector))
+			if err != nil {
+				return xerrors.Errorf("checking if sector is faulty: %w", err)
+			}
 
 			for _, ft := range storiface.PathTypes {
-				si, err := nodeApi.StorageFindSector(ctx, sid(sector), ft, mi.SectorSize, false)
+				si, err := minerApi.StorageFindSector(ctx, sid(sector), ft, mi.SectorSize, false)
 				if err != nil {
 					return xerrors.Errorf("find sector %d: %w", sector, err)
 				}
@@ -569,10 +731,14 @@ var storageListSectorsCmd = &cli.Command{
 						urls:    strings.Join(info.URLs, ";"),
 
 						primary: info.Primary,
-						seal:    info.CanSeal,
-						store:   info.CanStore,
+						copy:    !info.Primary && len(si) > 1,
+						main:    !info.Primary && len(si) == 1, // only copy, but not primary
 
-						state: st.State,
+						seal:  info.CanSeal,
+						store: info.CanStore,
+
+						state:  st.State,
+						faulty: fault,
 					})
 				}
 			}
@@ -600,6 +766,7 @@ var storageListSectorsCmd = &cli.Command{
 			tablewriter.Col("Sector"),
 			tablewriter.Col("Type"),
 			tablewriter.Col("State"),
+			tablewriter.Col("Faulty"),
 			tablewriter.Col("Primary"),
 			tablewriter.Col("Path use"),
 			tablewriter.Col("URLs"),
@@ -623,15 +790,65 @@ var storageListSectorsCmd = &cli.Command{
 				"Sector":   e.id,
 				"Type":     e.ft.String(),
 				"State":    color.New(stateOrder[sealing.SectorState(e.state)].col).Sprint(e.state),
-				"Primary":  maybeStr(e.seal, color.FgGreen, "primary"),
+				"Primary":  maybeStr(e.primary, color.FgGreen, "primary") + maybeStr(e.copy, color.FgBlue, "copy") + maybeStr(e.main, color.FgRed, "main"),
 				"Path use": maybeStr(e.seal, color.FgMagenta, "seal ") + maybeStr(e.store, color.FgCyan, "store"),
 				"URLs":     e.urls,
+			}
+			if e.faulty {
+				// only set when there is a fault, so the column is hidden with no faults
+				m["Faulty"] = color.RedString("faulty")
 			}
 			tw.Write(m)
 		}
 
 		return tw.Flush(os.Stdout)
 	},
+}
+
+func getAllPartitions(ctx context.Context, maddr address.Address, napi api.FullNode) (api.Partition, error) {
+	deadlines, err := napi.StateMinerDeadlines(ctx, maddr, types.EmptyTSK)
+	if err != nil {
+		return api.Partition{}, xerrors.Errorf("getting deadlines: %w", err)
+	}
+
+	out := api.Partition{
+		AllSectors:        bitfield.New(),
+		FaultySectors:     bitfield.New(),
+		RecoveringSectors: bitfield.New(),
+		LiveSectors:       bitfield.New(),
+		ActiveSectors:     bitfield.New(),
+	}
+
+	for dlIdx := range deadlines {
+		partitions, err := napi.StateMinerPartitions(ctx, maddr, uint64(dlIdx), types.EmptyTSK)
+		if err != nil {
+			return api.Partition{}, xerrors.Errorf("getting partitions for deadline %d: %w", dlIdx, err)
+		}
+
+		for _, partition := range partitions {
+			out.AllSectors, err = bitfield.MergeBitFields(out.AllSectors, partition.AllSectors)
+			if err != nil {
+				return api.Partition{}, err
+			}
+			out.FaultySectors, err = bitfield.MergeBitFields(out.FaultySectors, partition.FaultySectors)
+			if err != nil {
+				return api.Partition{}, err
+			}
+			out.RecoveringSectors, err = bitfield.MergeBitFields(out.RecoveringSectors, partition.RecoveringSectors)
+			if err != nil {
+				return api.Partition{}, err
+			}
+			out.LiveSectors, err = bitfield.MergeBitFields(out.LiveSectors, partition.LiveSectors)
+			if err != nil {
+				return api.Partition{}, err
+			}
+			out.ActiveSectors, err = bitfield.MergeBitFields(out.ActiveSectors, partition.ActiveSectors)
+			if err != nil {
+				return api.Partition{}, err
+			}
+		}
+	}
+	return out, nil
 }
 
 func maybeStr(c bool, col color.Attribute, s string) string {
@@ -653,7 +870,7 @@ var storageCleanupCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		api, closer, err := lcli.GetStorageMinerAPI(cctx)
+		minerAPI, closer, err := lcli.GetStorageMinerAPI(cctx)
 		if err != nil {
 			return err
 		}
@@ -668,7 +885,7 @@ var storageCleanupCmd = &cli.Command{
 		ctx := lcli.ReqContext(cctx)
 
 		if cctx.Bool("removed") {
-			if err := cleanupRemovedSectorData(ctx, api, napi); err != nil {
+			if err := cleanupRemovedSectorData(ctx, minerAPI, napi); err != nil {
 				return err
 			}
 		}
@@ -740,4 +957,44 @@ func cleanupRemovedSectorData(ctx context.Context, api api.StorageMiner, napi v0
 	}
 
 	return nil
+}
+
+var storageLocks = &cli.Command{
+	Name:  "locks",
+	Usage: "show active sector locks",
+	Action: func(cctx *cli.Context) error {
+		minerAPI, closer, err := lcli.GetStorageMinerAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := lcli.ReqContext(cctx)
+
+		locks, err := minerAPI.StorageGetLocks(ctx)
+		if err != nil {
+			return err
+		}
+
+		for _, lock := range locks.Locks {
+			st, err := minerAPI.SectorsStatus(ctx, lock.Sector.Number, false)
+			if err != nil {
+				return xerrors.Errorf("getting sector status(%d): %w", lock.Sector.Number, err)
+			}
+
+			lockstr := fmt.Sprintf("%d\t%s\t", lock.Sector.Number, color.New(stateOrder[sealing.SectorState(st.State)].col).Sprint(st.State))
+
+			for i := 0; i < storiface.FileTypes; i++ {
+				if lock.Write[i] > 0 {
+					lockstr += fmt.Sprintf("%s(%s) ", storiface.SectorFileType(1<<i).String(), color.RedString("W"))
+				}
+				if lock.Read[i] > 0 {
+					lockstr += fmt.Sprintf("%s(%s:%d) ", storiface.SectorFileType(1<<i).String(), color.GreenString("R"), lock.Read[i])
+				}
+			}
+
+			fmt.Println(lockstr)
+		}
+
+		return nil
+	},
 }

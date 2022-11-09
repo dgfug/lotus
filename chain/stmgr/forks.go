@@ -15,8 +15,9 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/network"
-	"github.com/filecoin-project/specs-actors/v3/actors/migration/nv10"
+	"github.com/filecoin-project/specs-actors/v8/actors/migration/nv16"
 
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	init_ "github.com/filecoin-project/lotus/chain/actors/builtin/init"
@@ -35,19 +36,20 @@ type MigrationCache interface {
 
 // MigrationFunc is a migration function run at every upgrade.
 //
-// - The cache is a per-upgrade cache, pre-populated by pre-migrations.
-// - The oldState is the state produced by the upgrade epoch.
-// - The returned newState is the new state that will be used by the next epoch.
-// - The height is the upgrade epoch height (already executed).
-// - The tipset is the first non-null tipset after the upgrade height (the tipset in
-//   which the upgrade is executed). Do not assume that ts.Height() is the upgrade height.
+//   - The cache is a per-upgrade cache, pre-populated by pre-migrations.
+//   - The oldState is the state produced by the upgrade epoch.
+//   - The returned newState is the new state that will be used by the next epoch.
+//   - The height is the upgrade epoch height (already executed).
+//   - The tipset is the first non-null tipset after the upgrade height (the tipset in
+//     which the upgrade is executed). Do not assume that ts.Height() is the upgrade height.
 //
 // NOTE: In StateCompute and CallWithGas, the passed tipset is actually the tipset _before_ the
 // upgrade. The tipset should really only be used for referencing the "current chain".
 type MigrationFunc func(
 	ctx context.Context,
 	sm *StateManager, cache MigrationCache,
-	cb ExecMonitor, oldState cid.Cid,
+	cb ExecMonitor,
+	oldState cid.Cid,
 	height abi.ChainEpoch, ts *types.TipSet,
 ) (newState cid.Cid, err error)
 
@@ -161,7 +163,8 @@ func (us UpgradeSchedule) GetNtwkVersion(e abi.ChainEpoch) (network.Version, err
 			return u.Network, nil
 		}
 	}
-	return network.Version0, xerrors.Errorf("Epoch %d has no defined network version", e)
+
+	return build.GenesisNetworkVersion, nil
 }
 
 func (sm *StateManager) HandleStateForks(ctx context.Context, root cid.Cid, height abi.ChainEpoch, cb ExecMonitor, ts *types.TipSet) (cid.Cid, error) {
@@ -211,7 +214,7 @@ func (sm *StateManager) hasExpensiveFork(height abi.ChainEpoch) bool {
 	return ok
 }
 
-func runPreMigration(ctx context.Context, sm *StateManager, fn PreMigrationFunc, cache *nv10.MemMigrationCache, ts *types.TipSet) {
+func runPreMigration(ctx context.Context, sm *StateManager, fn PreMigrationFunc, cache *nv16.MemMigrationCache, ts *types.TipSet) {
 	height := ts.Height()
 	parent := ts.ParentState()
 

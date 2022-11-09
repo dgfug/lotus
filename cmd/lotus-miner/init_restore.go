@@ -6,11 +6,9 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/filecoin-project/lotus/api/v0api"
-
 	"github.com/docker/go-units"
 	"github.com/ipfs/go-datastore"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
@@ -20,15 +18,16 @@ import (
 	"github.com/filecoin-project/go-paramfetch"
 	"github.com/filecoin-project/go-state-types/big"
 
+	"github.com/filecoin-project/lotus/api"
 	lapi "github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
-	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
 	"github.com/filecoin-project/lotus/lib/backupds"
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/repo"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 var restoreCmd = &cli.Command{
@@ -53,7 +52,7 @@ var restoreCmd = &cli.Command{
 		ctx := lcli.ReqContext(cctx)
 		log.Info("Initializing lotus miner using a backup")
 
-		var storageCfg *stores.StorageConfig
+		var storageCfg *storiface.StorageConfig
 		if cctx.IsSet("storage-config") {
 			cf, err := homedir.Expand(cctx.String("storage-config"))
 			if err != nil {
@@ -65,7 +64,7 @@ var restoreCmd = &cli.Command{
 				return xerrors.Errorf("reading storage config: %w", err)
 			}
 
-			storageCfg = &stores.StorageConfig{}
+			storageCfg = &storiface.StorageConfig{}
 			err = json.Unmarshal(cfb, storageCfg)
 			if err != nil {
 				return xerrors.Errorf("cannot unmarshal json for storage config: %w", err)
@@ -74,7 +73,7 @@ var restoreCmd = &cli.Command{
 
 		repoPath := cctx.String(FlagMinerRepo)
 
-		if err := restore(ctx, cctx, repoPath, storageCfg, nil, func(api lapi.FullNode, maddr address.Address, peerid peer.ID, mi miner.MinerInfo) error {
+		if err := restore(ctx, cctx, repoPath, storageCfg, nil, func(api lapi.FullNode, maddr address.Address, peerid peer.ID, mi api.MinerInfo) error {
 			log.Info("Checking proof parameters")
 
 			if err := paramfetch.GetParams(ctx, build.ParametersJSON(), build.SrsJSON(), uint64(mi.SectorSize)); err != nil {
@@ -96,9 +95,9 @@ var restoreCmd = &cli.Command{
 	},
 }
 
-func restore(ctx context.Context, cctx *cli.Context, targetPath string, strConfig *stores.StorageConfig, manageConfig func(*config.StorageMiner) error, after func(api lapi.FullNode, addr address.Address, peerid peer.ID, mi miner.MinerInfo) error) error {
-	if cctx.Args().Len() != 1 {
-		return xerrors.Errorf("expected 1 argument")
+func restore(ctx context.Context, cctx *cli.Context, targetPath string, strConfig *storiface.StorageConfig, manageConfig func(*config.StorageMiner) error, after func(api lapi.FullNode, addr address.Address, peerid peer.ID, mi api.MinerInfo) error) error {
+	if cctx.NArg() != 1 {
+		return lcli.IncorrectNumArgs(cctx)
 	}
 
 	log.Info("Trying to connect to full node RPC")
@@ -215,7 +214,7 @@ func restore(ctx context.Context, cctx *cli.Context, targetPath string, strConfi
 	if strConfig != nil {
 		log.Info("Restoring storage path config")
 
-		err = lr.SetStorage(func(scfg *stores.StorageConfig) {
+		err = lr.SetStorage(func(scfg *storiface.StorageConfig) {
 			*scfg = *strConfig
 		})
 		if err != nil {
@@ -224,8 +223,8 @@ func restore(ctx context.Context, cctx *cli.Context, targetPath string, strConfi
 	} else {
 		log.Warn("--storage-config NOT SET. NO SECTOR PATHS WILL BE CONFIGURED")
 		// setting empty config to allow miner to be started
-		if err := lr.SetStorage(func(sc *stores.StorageConfig) {
-			sc.StoragePaths = append(sc.StoragePaths, stores.LocalPath{})
+		if err := lr.SetStorage(func(sc *storiface.StorageConfig) {
+			sc.StoragePaths = append(sc.StoragePaths, storiface.LocalPath{})
 		}); err != nil {
 			return xerrors.Errorf("set storage config: %w", err)
 		}
@@ -233,7 +232,7 @@ func restore(ctx context.Context, cctx *cli.Context, targetPath string, strConfi
 
 	log.Info("Restoring metadata backup")
 
-	mds, err := lr.Datastore(context.TODO(), "/metadata")
+	mds, err := lr.Datastore(ctx, "/metadata")
 	if err != nil {
 		return err
 	}
@@ -255,7 +254,7 @@ func restore(ctx context.Context, cctx *cli.Context, targetPath string, strConfi
 
 	log.Info("Checking actor metadata")
 
-	abytes, err := mds.Get(datastore.NewKey("miner-address"))
+	abytes, err := mds.Get(ctx, datastore.NewKey("miner-address"))
 	if err != nil {
 		return xerrors.Errorf("getting actor address from metadata datastore: %w", err)
 	}

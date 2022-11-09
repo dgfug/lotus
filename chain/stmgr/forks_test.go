@@ -1,3 +1,4 @@
+// stm: #integration
 package stmgr_test
 
 import (
@@ -16,9 +17,10 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	actorstypes "github.com/filecoin-project/go-state-types/actors"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/network"
-
+	rtt "github.com/filecoin-project/go-state-types/rt"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	init2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	rt2 "github.com/filecoin-project/specs-actors/v2/actors/runtime"
@@ -26,6 +28,7 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/aerrors"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	_init "github.com/filecoin-project/lotus/chain/actors/builtin/init"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
@@ -106,6 +109,9 @@ func (ta *testActor) TestMethod(rt rt2.Runtime, params *abi.EmptyValue) *abi.Emp
 }
 
 func TestForkHeightTriggers(t *testing.T) {
+	//stm: @CHAIN_STATETREE_GET_ACTOR_001, @CHAIN_STATETREE_FLUSH_001, @TOKEN_WALLET_SIGN_001
+	//stm: @CHAIN_GEN_NEXT_TIPSET_001
+	//stm: @CHAIN_STATE_RESOLVE_TO_KEY_ADDR_001, @CHAIN_STATE_SET_VM_CONSTRUCTOR_001
 	logging.SetAllLoggers(logging.LevelInfo)
 
 	ctx := context.TODO()
@@ -164,10 +170,11 @@ func TestForkHeightTriggers(t *testing.T) {
 	}
 
 	inv := filcns.NewActorRegistry()
-	inv.Register(nil, testActor{})
+	registry := builtin.MakeRegistryLegacy([]rtt.VMActor{testActor{}})
+	inv.Register(actorstypes.Version0, nil, registry)
 
-	sm.SetVMConstructor(func(ctx context.Context, vmopt *vm.VMOpts) (*vm.VM, error) {
-		nvm, err := vm.NewVM(ctx, vmopt)
+	sm.SetVMConstructor(func(ctx context.Context, vmopt *vm.VMOpts) (vm.Interface, error) {
+		nvm, err := vm.NewLegacyVM(ctx, vmopt)
 		if err != nil {
 			return nil, err
 		}
@@ -241,6 +248,8 @@ func TestForkHeightTriggers(t *testing.T) {
 }
 
 func TestForkRefuseCall(t *testing.T) {
+	//stm: @CHAIN_GEN_NEXT_TIPSET_001, @CHAIN_GEN_NEXT_TIPSET_FROM_MINERS_001
+	//stm: @CHAIN_STATE_RESOLVE_TO_KEY_ADDR_001, @CHAIN_STATE_SET_VM_CONSTRUCTOR_001, @CHAIN_STATE_CALL_001
 	logging.SetAllLoggers(logging.LevelInfo)
 
 	for after := 0; after < 3; after++ {
@@ -279,10 +288,11 @@ func testForkRefuseCall(t *testing.T, nullsBefore, nullsAfter int) {
 	}
 
 	inv := filcns.NewActorRegistry()
-	inv.Register(nil, testActor{})
+	registry := builtin.MakeRegistryLegacy([]rtt.VMActor{testActor{}})
+	inv.Register(actorstypes.Version0, nil, registry)
 
-	sm.SetVMConstructor(func(ctx context.Context, vmopt *vm.VMOpts) (*vm.VM, error) {
-		nvm, err := vm.NewVM(ctx, vmopt)
+	sm.SetVMConstructor(func(ctx context.Context, vmopt *vm.VMOpts) (vm.Interface, error) {
+		nvm, err := vm.NewLegacyVM(ctx, vmopt)
 		if err != nil {
 			return nil, err
 		}
@@ -360,6 +370,8 @@ func testForkRefuseCall(t *testing.T, nullsBefore, nullsAfter int) {
 }
 
 func TestForkPreMigration(t *testing.T) {
+	//stm: @CHAIN_GEN_NEXT_TIPSET_001,
+	//stm: @CHAIN_STATE_RESOLVE_TO_KEY_ADDR_001, @CHAIN_STATE_SET_VM_CONSTRUCTOR_001
 	logging.SetAllLoggers(logging.LevelInfo)
 
 	cg, err := gen.NewGenerator()
@@ -498,10 +510,11 @@ func TestForkPreMigration(t *testing.T) {
 	}()
 
 	inv := filcns.NewActorRegistry()
-	inv.Register(nil, testActor{})
+	registry := builtin.MakeRegistryLegacy([]rtt.VMActor{testActor{}})
+	inv.Register(actorstypes.Version0, nil, registry)
 
-	sm.SetVMConstructor(func(ctx context.Context, vmopt *vm.VMOpts) (*vm.VM, error) {
-		nvm, err := vm.NewVM(ctx, vmopt)
+	sm.SetVMConstructor(func(ctx context.Context, vmopt *vm.VMOpts) (vm.Interface, error) {
+		nvm, err := vm.NewLegacyVM(ctx, vmopt)
 		if err != nil {
 			return nil, err
 		}

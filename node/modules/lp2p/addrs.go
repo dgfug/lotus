@@ -4,14 +4,14 @@ import (
 	"fmt"
 
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p/core/host"
 	p2pbhost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	mafilter "github.com/libp2p/go-maddr-filter"
 	ma "github.com/multiformats/go-multiaddr"
 	mamask "github.com/whyrusleeping/multiaddr-filter"
 )
 
-func makeAddrsFactory(announce []string, noAnnounce []string) (p2pbhost.AddrsFactory, error) {
+func MakeAddrsFactory(announce []string, noAnnounce []string) (p2pbhost.AddrsFactory, error) {
 	var annAddrs []ma.Multiaddr
 	for _, addr := range announce {
 		maddr, err := ma.NewMultiaddr(addr)
@@ -59,7 +59,7 @@ func makeAddrsFactory(announce []string, noAnnounce []string) (p2pbhost.AddrsFac
 
 func AddrsFactory(announce []string, noAnnounce []string) func() (opts Libp2pOpts, err error) {
 	return func() (opts Libp2pOpts, err error) {
-		addrsFactory, err := makeAddrsFactory(announce, noAnnounce)
+		addrsFactory, err := MakeAddrsFactory(announce, noAnnounce)
 		if err != nil {
 			return opts, err
 		}

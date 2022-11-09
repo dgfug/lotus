@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/filecoin-project/lotus/testplans/lotus-soup/testkit"
+	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/cli"
-	tstats "github.com/filecoin-project/lotus/tools/stats"
-	"github.com/ipfs/go-cid"
+	"github.com/filecoin-project/lotus/testplans/lotus-soup/testkit"
+	tsync "github.com/filecoin-project/lotus/tools/stats/sync"
 )
 
 func FetchChainState(t *testkit.TestEnvironment, m *testkit.LotusMiner) error {
@@ -22,8 +23,9 @@ func FetchChainState(t *testkit.TestEnvironment, m *testkit.LotusMiner) error {
 	ctx := context.Background()
 	api := m.FullApi
 
-	tipsetsCh, err := tstats.GetTips(ctx, &v0api.WrapperV1Full{FullNode: m.FullApi}, abi.ChainEpoch(height), headlag)
+	tipsetsCh, err := tsync.BufferedTipsetChannel(ctx, &v0api.WrapperV1Full{FullNode: m.FullApi}, abi.ChainEpoch(height), headlag)
 	if err != nil {
+
 		return err
 	}
 

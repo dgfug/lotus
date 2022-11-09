@@ -1,3 +1,4 @@
+// stm: #integration
 package itests
 
 import (
@@ -9,9 +10,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ipfs/go-cid"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-state-types/abi"
+	init2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
+	multisig2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/client"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -21,13 +29,6 @@ import (
 	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/filecoin-project/lotus/itests/multisig"
 	"github.com/filecoin-project/lotus/node"
-
-	init2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
-	multisig2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
-
-	"github.com/ipfs/go-cid"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -38,6 +39,12 @@ const (
 // TestGatewayWalletMsig tests that API calls to wallet and msig can be made on a lite
 // node that is connected through a gateway to a full API node
 func TestGatewayWalletMsig(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
+
+	//stm: @CHAIN_INCOMING_HANDLE_INCOMING_BLOCKS_001, @CHAIN_INCOMING_VALIDATE_BLOCK_PUBSUB_001, @CHAIN_INCOMING_VALIDATE_MESSAGE_PUBSUB_001
 	kit.QuietMiningLogs()
 
 	blocktime := 5 * time.Millisecond
@@ -116,6 +123,7 @@ func TestGatewayWalletMsig(t *testing.T) {
 	addProposal, err := doSend(proto)
 	require.NoError(t, err)
 
+	//stm: @CHAIN_STATE_WAIT_MSG_001
 	res, err := lite.StateWaitMsg(ctx, addProposal, 1, api.LookbackNoLimit, true)
 	require.NoError(t, err)
 	require.EqualValues(t, 0, res.Receipt.ExitCode)
@@ -127,10 +135,11 @@ func TestGatewayWalletMsig(t *testing.T) {
 	// Get available balance of msig: should be greater than zero and less
 	// than initial amount
 	msig := execReturn.IDAddress
+	//stm: @CHAIN_STATE_MINER_AVAILABLE_BALANCE_001
 	msigBalance, err := lite.MsigGetAvailableBalance(ctx, msig, types.EmptyTSK)
 	require.NoError(t, err)
-	require.Greater(t, msigBalance.Int64(), int64(0))
-	require.Less(t, msigBalance.Int64(), amt.Int64())
+	require.GreaterOrEqual(t, msigBalance.Int64(), int64(0))
+	require.LessOrEqual(t, msigBalance.Int64(), amt.Int64())
 
 	// Propose to add a new address to the msig
 	proto, err = lite.MsigAddPropose(ctx, msig, walletAddrs[0], walletAddrs[3], false)
@@ -139,6 +148,7 @@ func TestGatewayWalletMsig(t *testing.T) {
 	addProposal, err = doSend(proto)
 	require.NoError(t, err)
 
+	//stm: @CHAIN_STATE_WAIT_MSG_001
 	res, err = lite.StateWaitMsg(ctx, addProposal, 1, api.LookbackNoLimit, true)
 	require.NoError(t, err)
 	require.EqualValues(t, 0, res.Receipt.ExitCode)
@@ -156,6 +166,7 @@ func TestGatewayWalletMsig(t *testing.T) {
 	approval1, err := doSend(proto)
 	require.NoError(t, err)
 
+	//stm: @CHAIN_STATE_WAIT_MSG_001
 	res, err = lite.StateWaitMsg(ctx, approval1, 1, api.LookbackNoLimit, true)
 	require.NoError(t, err)
 	require.EqualValues(t, 0, res.Receipt.ExitCode)
@@ -169,6 +180,10 @@ func TestGatewayWalletMsig(t *testing.T) {
 // TestGatewayMsigCLI tests that msig CLI calls can be made
 // on a lite node that is connected through a gateway to a full API node
 func TestGatewayMsigCLI(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
 	kit.QuietMiningLogs()
 
 	blocktime := 5 * time.Millisecond
@@ -180,6 +195,10 @@ func TestGatewayMsigCLI(t *testing.T) {
 }
 
 func TestGatewayDealFlow(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
 	kit.QuietMiningLogs()
 
 	blocktime := 5 * time.Millisecond
@@ -202,6 +221,10 @@ func TestGatewayDealFlow(t *testing.T) {
 }
 
 func TestGatewayCLIDealFlow(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
 	kit.QuietMiningLogs()
 
 	blocktime := 5 * time.Millisecond
@@ -267,8 +290,8 @@ func startNodes(
 	ens.InterconnectAll().BeginMining(blocktime)
 
 	// Create a gateway server in front of the full node
-	gwapi := gateway.NewNode(full, lookbackCap, stateWaitLookbackLimit)
-	handler, err := gateway.Handler(gwapi)
+	gwapi := gateway.NewNode(full, lookbackCap, stateWaitLookbackLimit, 0, time.Minute)
+	handler, err := gateway.Handler(gwapi, full, 0, 0)
 	require.NoError(t, err)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")

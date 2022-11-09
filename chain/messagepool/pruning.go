@@ -5,10 +5,12 @@ import (
 	"sort"
 	"time"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
+
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func (mp *MessagePool) pruneExcessMessages() error {
@@ -49,7 +51,7 @@ func (mp *MessagePool) pruneMessages(ctx context.Context, ts *types.TipSet) erro
 	}
 	baseFeeLowerBound := getBaseFeeLowerBound(baseFee, baseFeeLowerBoundFactor)
 
-	pending, _ := mp.getPendingMessages(ts, ts)
+	pending, _ := mp.getPendingMessages(ctx, ts, ts)
 
 	// protected actors -- not pruned
 	protected := make(map[address.Address]struct{})

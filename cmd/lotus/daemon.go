@@ -16,8 +16,6 @@ import (
 	"runtime/pprof"
 	"strings"
 
-	"github.com/filecoin-project/go-jsonrpc"
-	paramfetch "github.com/filecoin-project/go-paramfetch"
 	metricsprom "github.com/ipfs/go-metrics-prometheus"
 	"github.com/mitchellh/go-homedir"
 	"github.com/multiformats/go-multiaddr"
@@ -29,7 +27,10 @@ import (
 	"golang.org/x/xerrors"
 	"gopkg.in/cheggaaa/pb.v1"
 
-	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/go-jsonrpc"
+	"github.com/filecoin-project/go-paramfetch"
+
+	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -37,7 +38,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	lcli "github.com/filecoin-project/lotus/cli"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/journal/fsjournal"
 	"github.com/filecoin-project/lotus/lib/peermgr"
@@ -48,6 +48,7 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/testing"
 	"github.com/filecoin-project/lotus/node/repo"
+	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
 )
 
 const (
@@ -119,9 +120,8 @@ var DaemonCmd = &cli.Command{
 			Usage: "halt the process after importing chain from file",
 		},
 		&cli.BoolFlag{
-			Name:   "lite",
-			Usage:  "start lotus in lite mode",
-			Hidden: true,
+			Name:  "lite",
+			Usage: "start lotus in lite mode",
 		},
 		&cli.StringFlag{
 			Name:  "pprof",
@@ -303,7 +303,7 @@ var DaemonCmd = &cli.Command{
 			}
 
 			defer closer()
-			liteModeDeps = node.Override(new(api.Gateway), gapi)
+			liteModeDeps = node.Override(new(lapi.Gateway), gapi)
 		}
 
 		// some libraries like ipfs/go-ds-measure and ipfs/go-ipfs-blockstore
@@ -313,7 +313,7 @@ var DaemonCmd = &cli.Command{
 			log.Warnf("unable to inject prometheus ipfs/go-metrics exporter; some metrics will be unavailable; err: %s", err)
 		}
 
-		var api api.FullNode
+		var api lapi.FullNode
 		stop, err := node.New(ctx,
 			node.FullAPI(&api, node.Lite(isLite)),
 
@@ -360,7 +360,7 @@ var DaemonCmd = &cli.Command{
 		// ----
 
 		// Populate JSON-RPC options.
-		serverOptions := make([]jsonrpc.ServerOption, 0)
+		serverOptions := []jsonrpc.ServerOption{jsonrpc.WithServerErrors(lapi.RPCErrors)}
 		if maxRequestSize := cctx.Int("api-max-req-size"); maxRequestSize != 0 {
 			serverOptions = append(serverOptions, jsonrpc.WithMaxRequestSize(int64(maxRequestSize)))
 		}
@@ -392,7 +392,7 @@ var DaemonCmd = &cli.Command{
 	},
 }
 
-func importKey(ctx context.Context, api api.FullNode, f string) error {
+func importKey(ctx context.Context, api lapi.FullNode, f string) error {
 	f, err := homedir.Expand(f)
 	if err != nil {
 		return err
@@ -474,7 +474,7 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 		return xerrors.Errorf("failed to open blockstore: %w", err)
 	}
 
-	mds, err := lr.Datastore(context.TODO(), "/metadata")
+	mds, err := lr.Datastore(ctx, "/metadata")
 	if err != nil {
 		return err
 	}
@@ -499,14 +499,14 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 	bar.Units = pb.U_BYTES
 
 	bar.Start()
-	ts, err := cst.Import(br)
+	ts, err := cst.Import(ctx, br)
 	bar.Finish()
 
 	if err != nil {
 		return xerrors.Errorf("importing chain failed: %w", err)
 	}
 
-	if err := cst.FlushValidationCache(); err != nil {
+	if err := cst.FlushValidationCache(ctx); err != nil {
 		return xerrors.Errorf("flushing validation cache failed: %w", err)
 	}
 
@@ -515,7 +515,7 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 		return err
 	}
 
-	err = cst.SetGenesis(gb.Blocks()[0])
+	err = cst.SetGenesis(ctx, gb.Blocks()[0])
 	if err != nil {
 		return err
 	}

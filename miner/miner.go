@@ -10,31 +10,27 @@ import (
 	"sync"
 	"time"
 
-	lrand "github.com/filecoin-project/lotus/chain/rand"
-
-	"github.com/filecoin-project/lotus/api/v1api"
-
-	proof2 "github.com/filecoin-project/specs-actors/v2/actors/runtime/proof"
-
-	"github.com/filecoin-project/lotus/chain/actors/builtin"
-	"github.com/filecoin-project/lotus/chain/actors/policy"
-	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
+	lru "github.com/hashicorp/golang-lru"
+	logging "github.com/ipfs/go-log/v2"
+	"go.opencensus.io/trace"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/filecoin-project/go-state-types/proof"
 
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/gen"
+	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
+	lrand "github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/journal"
-
-	logging "github.com/ipfs/go-log/v2"
-	"go.opencensus.io/trace"
-	"golang.org/x/xerrors"
 )
 
 var log = logging.Logger("miner")
@@ -183,26 +179,26 @@ func (m *Miner) niceSleep(d time.Duration) bool {
 
 // mine runs the mining loop. It performs the following:
 //
-//  1.  Queries our current best currently-known mining candidate (tipset to
-//      build upon).
-//  2.  Waits until the propagation delay of the network has elapsed (currently
-//      6 seconds). The waiting is done relative to the timestamp of the best
-//      candidate, which means that if it's way in the past, we won't wait at
-//      all (e.g. in catch-up or rush mining).
-//  3.  After the wait, we query our best mining candidate. This will be the one
-//      we'll work with.
-//  4.  Sanity check that we _actually_ have a new mining base to mine on. If
-//      not, wait one epoch + propagation delay, and go back to the top.
-//  5.  We attempt to mine a block, by calling mineOne (refer to godocs). This
-//      method will either return a block if we were eligible to mine, or nil
-//      if we weren't.
-//  6a. If we mined a block, we update our state and push it out to the network
-//      via gossipsub.
-//  6b. If we didn't mine a block, we consider this to be a nil round on top of
-//      the mining base we selected. If other miner or miners on the network
-//      were eligible to mine, we will receive their blocks via gossipsub and
-//      we will select that tipset on the next iteration of the loop, thus
-//      discarding our null round.
+//  1. Queries our current best currently-known mining candidate (tipset to
+//     build upon).
+//  2. Waits until the propagation delay of the network has elapsed (currently
+//     6 seconds). The waiting is done relative to the timestamp of the best
+//     candidate, which means that if it's way in the past, we won't wait at
+//     all (e.g. in catch-up or rush mining).
+//  3. After the wait, we query our best mining candidate. This will be the one
+//     we'll work with.
+//  4. Sanity check that we _actually_ have a new mining base to mine on. If
+//     not, wait one epoch + propagation delay, and go back to the top.
+//  5. We attempt to mine a block, by calling mineOne (refer to godocs). This
+//     method will either return a block if we were eligible to mine, or nil
+//     if we weren't.
+//     6a. If we mined a block, we update our state and push it out to the network
+//     via gossipsub.
+//     6b. If we didn't mine a block, we consider this to be a nil round on top of
+//     the mining base we selected. If other miner or miners on the network
+//     were eligible to mine, we will receive their blocks via gossipsub and
+//     we will select that tipset on the next iteration of the loop, thus
+//     discarding our null round.
 func (m *Miner) mine(ctx context.Context) {
 	ctx, span := trace.StartSpan(ctx, "/mine")
 	defer span.End()
@@ -260,7 +256,7 @@ minerLoop:
 			}
 
 			// just wait for the beacon entry to become available before we select our final mining base
-			_, err = m.api.BeaconGetEntry(ctx, prebase.TipSet.Height()+prebase.NullRounds+1)
+			_, err = m.api.StateGetBeaconEntry(ctx, prebase.TipSet.Height()+prebase.NullRounds+1)
 			if err != nil {
 				log.Errorf("failed getting beacon entry: %s", err)
 				if !m.niceSleep(time.Second) {
@@ -325,7 +321,7 @@ minerLoop:
 					"block-time", btime, "time", build.Clock.Now(), "difference", build.Clock.Since(btime))
 			}
 
-			if err := m.sf.MinedBlock(b.Header, base.TipSet.Height()+base.NullRounds); err != nil {
+			if err := m.sf.MinedBlock(ctx, b.Header, base.TipSet.Height()+base.NullRounds); err != nil {
 				log.Errorf("<!!> SLASH FILTER ERROR: %s", err)
 				if os.Getenv("LOTUS_MINER_NO_SLASHFILTER") != "_yes_i_know_i_can_and_probably_will_lose_all_my_fil_and_power_" {
 					continue
@@ -420,7 +416,7 @@ func (m *Miner) GetBestMiningCandidate(ctx context.Context) (*MiningBase, error)
 //
 // This method does the following:
 //
-//  1.
+//	1.
 func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *types.BlockMsg, err error) {
 	log.Debugw("attempting to mine a block", "tipset", types.LogCids(base.TipSet.Cids()))
 	tStart := build.Clock.Now()
@@ -535,8 +531,12 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	prand := abi.PoStRandomness(rand)
 
 	tSeed := build.Clock.Now()
+	nv, err := m.api.StateNetworkVersion(ctx, base.TipSet.Key())
+	if err != nil {
+		return nil, err
+	}
 
-	postProof, err := m.epp.ComputeProof(ctx, mbi.Sectors, prand)
+	postProof, err := m.epp.ComputeProof(ctx, mbi.Sectors, prand, round, nv)
 	if err != nil {
 		err = xerrors.Errorf("failed to compute winning post proof: %w", err)
 		return nil, err
@@ -607,7 +607,7 @@ func (m *Miner) computeTicket(ctx context.Context, brand *types.BeaconEntry, bas
 }
 
 func (m *Miner) createBlock(base *MiningBase, addr address.Address, ticket *types.Ticket,
-	eproof *types.ElectionProof, bvals []types.BeaconEntry, wpostProof []proof2.PoStProof, msgs []*types.SignedMessage) (*types.BlockMsg, error) {
+	eproof *types.ElectionProof, bvals []types.BeaconEntry, wpostProof []proof.PoStProof, msgs []*types.SignedMessage) (*types.BlockMsg, error) {
 	uts := base.TipSet.MinTimestamp() + build.BlockDelaySecs*(uint64(base.NullRounds)+1)
 
 	nheight := base.TipSet.Height() + base.NullRounds + 1

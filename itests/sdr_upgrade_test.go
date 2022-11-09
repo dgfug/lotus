@@ -1,3 +1,4 @@
+// stm: #integration
 package itests
 
 import (
@@ -7,16 +8,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/network"
+
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/itests/kit"
 	bminer "github.com/filecoin-project/lotus/miner"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSDRUpgrade(t *testing.T) {
+	//stm: @CHAIN_SYNCER_LOAD_GENESIS_001, @CHAIN_SYNCER_FETCH_TIPSET_001,
+	//stm: @CHAIN_SYNCER_START_001, @CHAIN_SYNCER_SYNC_001, @BLOCKCHAIN_BEACON_VALIDATE_BLOCK_VALUES_01
+	//stm: @CHAIN_SYNCER_COLLECT_CHAIN_001, @CHAIN_SYNCER_COLLECT_HEADERS_001, @CHAIN_SYNCER_VALIDATE_TIPSET_001
+	//stm: @CHAIN_SYNCER_NEW_PEER_HEAD_001, @CHAIN_SYNCER_VALIDATE_MESSAGE_META_001, @CHAIN_SYNCER_STOP_001
+
+	//stm: @CHAIN_INCOMING_HANDLE_INCOMING_BLOCKS_001, @CHAIN_INCOMING_VALIDATE_BLOCK_PUBSUB_001, @CHAIN_INCOMING_VALIDATE_MESSAGE_PUBSUB_001
+	//stm: @CHAIN_STATE_NETWORK_VERSION_001
+
+	//stm: @MINER_SECTOR_LIST_001
 	kit.QuietMiningLogs()
 
 	// oldDelay := policy.GetPreCommitChallengeDelay()
@@ -83,7 +95,7 @@ func TestSDRUpgrade(t *testing.T) {
 	// before.
 	miner.PledgeSectors(ctx, 9, 0, pledge)
 
-	s, err := miner.SectorsList(ctx)
+	s, err := miner.SectorsListNonGenesis(ctx)
 	require.NoError(t, err)
 	sort.Slice(s, func(i, j int) bool {
 		return s[i] < s[j]

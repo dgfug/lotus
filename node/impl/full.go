@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
@@ -35,14 +34,13 @@ type FullNodeAPI struct {
 	full.MsigAPI
 	full.WalletAPI
 	full.SyncAPI
-	full.BeaconAPI
 
 	DS          dtypes.MetadataDS
 	NetworkName dtypes.NetworkName
 }
 
 func (n *FullNodeAPI) CreateBackup(ctx context.Context, fpath string) error {
-	return backup(n.DS, fpath)
+	return backup(ctx, n.DS, fpath)
 }
 
 func (n *FullNodeAPI) NodeStatus(ctx context.Context, inclChainStatus bool) (status api.NodeStatus, err error) {

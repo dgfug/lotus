@@ -28,10 +28,10 @@ func (sim *Simulation) Step(ctx context.Context) (*types.TipSet, error) {
 
 // popNextMessages generates/picks a set of messages to be included in the next block.
 //
-// - This function is destructive and should only be called once per epoch.
-// - This function does not store anything in the repo.
-// - This function handles all gas estimation. The returned messages should all fit in a single
-//   block.
+//   - This function is destructive and should only be called once per epoch.
+//   - This function does not store anything in the repo.
+//   - This function handles all gas estimation. The returned messages should all fit in a single
+//     block.
 func (sim *Simulation) popNextMessages(ctx context.Context) ([]*types.Message, error) {
 	parentTs := sim.head
 
@@ -41,8 +41,8 @@ func (sim *Simulation) popNextMessages(ctx context.Context) ([]*types.Message, e
 	// This isn't what the network does, but it makes things easier. Otherwise, we'd need to run
 	// migrations before this epoch and I'd rather not deal with that.
 	nextHeight := parentTs.Height() + 1
-	prevVer := sim.StateManager.GetNtwkVersion(ctx, nextHeight-1)
-	nextVer := sim.StateManager.GetNtwkVersion(ctx, nextHeight)
+	prevVer := sim.StateManager.GetNetworkVersion(ctx, nextHeight-1)
+	nextVer := sim.StateManager.GetNetworkVersion(ctx, nextHeight)
 	if nextVer != prevVer {
 		log.Warnw("packing no messages for version upgrade block",
 			"old", prevVer,
